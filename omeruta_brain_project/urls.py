@@ -23,5 +23,6 @@ urlpatterns = [
     path("api/", include("core.urls")),
     path("api/auth/", include("authentication.urls")),
     path("api/crawler/", include("crawler.urls")),
+    path("api/agents/", include("agents.urls")),
     path("accounts/", include("allauth.urls")),
 ]

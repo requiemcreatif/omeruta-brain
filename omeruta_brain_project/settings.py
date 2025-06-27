@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "core",
     "authentication",
     "crawler",
+    "agents",
 ]
 
 MIDDLEWARE = [
@@ -239,3 +240,37 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+# AI/ML Model Configuration
+AI_MODELS = {
+    "LOCAL_MODELS": {
+        "tinyllama": {
+            "model_name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+            "enabled": True,
+            "use_case": ["simple_qa", "fast_response"],
+            "max_tokens": 512,
+            "temperature": 0.7,
+        }
+    },
+    "API_MODELS": {
+        "gpt-3.5-turbo": {
+            "enabled": bool(env("OPENAI_API_KEY", default="")),
+            "use_case": ["complex_reasoning", "research"],
+            "max_tokens": 1000,
+            "temperature": 0.7,
+        }
+    },
+    "DEFAULT_LOCAL_MODEL": "tinyllama",
+    "DEFAULT_API_MODEL": "gpt-3.5-turbo",
+    "PREFER_LOCAL_FOR_SIMPLE": True,
+    "AUTO_FALLBACK": True,
+}
+
+# Vector Database Configuration
+VECTOR_SETTINGS = {
+    "EMBEDDING_MODEL": "all-MiniLM-L6-v2",
+    "CHUNK_SIZE": 1000,
+    "CHUNK_OVERLAP": 100,
+    "SIMILARITY_THRESHOLD": 0.7,
+    "MAX_CONTEXT_TOKENS": 2000,
+}
