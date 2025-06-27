@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Omeruta Brain WebSocket Demo</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: #f5f5f5;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        text-align: center;
+      }
+
+      .demo-controls {
+        padding: 20px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .demo-controls input,
+      .demo-controls select,
+      .demo-controls button {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+
+      .demo-controls button {
+        background: #007aff;
+        color: white;
+        border: none;
+        cursor: pointer;
+      }
+
+      .demo-controls button:hover {
+        background: #0056b3;
+      }
+
+      .demo-controls button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+
+      #main-chat-area {
+        min-height: 400px;
+        max-height: 600px;
+        overflow-y: auto;
+        padding: 20px;
+      }
+
+      .stats {
+        padding: 20px;
+        background: #f8f9fa;
+        border-top: 1px solid #eee;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+      }
+
+      .stat-item {
+        text-align: center;
+      }
+
+      .stat-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: #007aff;
+      }
+
+      .stat-label {
+        font-size: 12px;
+        color: #666;
+        margin-top: 4px;
+      }
+
+      .log {
+        margin-top: 20px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 4px;
+        font-family: "Courier New", monospace;
+        font-size: 12px;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .status-indicator {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+      }
+
+      .status-connected {
+        background: #28a745;
+      }
+      .status-connecting {
+        background: #ffc107;
+      }
+      .status-disconnected {
+        background: #dc3545;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🧠 Omeruta Brain WebSocket Demo</h1>
+        <p>Real-time AI Communication with Progress Updates</p>
+        <div id="connection-status"></div>
+      </div>
+
+      <div class="demo-controls">
+        <input
+          type="text"
+          id="message-input"
+          placeholder="Ask me anything..."
+          style="flex: 1; min-width: 300px"
+        />
+        <select id="agent-type">
+          <option value="general">General Agent</option>
+          <option value="research">Research Agent</option>
+          <option value="qa">Q&A Agent</option>
+          <option value="content_analyzer">Content Analyzer</option>
+        </select>
+        <label>
+          <input type="checkbox" id="use-context" checked /> Use Context
+        </label>
+        <button id="send-btn">Send Message</button>
+        <button id="connect-btn">Connect WebSocket</button>
+        <button id="clear-btn">Clear Chat</button>
+      </div>
+
+      <div id="main-chat-area">
+        <div class="message">
+          <div class="message-avatar">🤖</div>
+          <div class="message-content">
+            <div class="message-text">
+              Welcome to Omeruta Brain! I'm ready to help you with questions
+              about cryptocurrency, technology, and more. Click "Connect
+              WebSocket" to start, or I'll use polling mode.
+            </div>
+            <div class="message-time">${new Date().toLocaleTimeString()}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat-item">
+          <div class="stat-value" id="messages-sent">0</div>
+          <div class="stat-label">Messages Sent</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="avg-response-time">-</div>
+          <div class="stat-label">Avg Response Time</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="connection-type">Polling</div>
+          <div class="stat-label">Connection Type</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="active-tasks">0</div>
+          <div class="stat-label">Active Tasks</div>
+        </div>
+      </div>
+
+      <div class="log" id="debug-log">
+        <strong>Debug Log:</strong><br />
+        Ready to start. Click "Connect WebSocket" or send a message to begin.
+      </div>
+    </div>
+
+    <script src="js/omeruta-brain-client.js"></script>
+    <script>
+      class WebSocketDemo {
+        constructor() {
+          this.client = null;
+          this.messagesSent = 0;
+          this.responseTimes = [];
+          this.activeTasks = 0;
+
+          this.initializeDemo();
+        }
+
+        initializeDemo() {
+          // Get elements
+          this.messageInput = document.getElementById("message-input");
+          this.sendBtn = document.getElementById("send-btn");
+          this.connectBtn = document.getElementById("connect-btn");
+          this.clearBtn = document.getElementById("clear-btn");
+          this.agentTypeSelect = document.getElementById("agent-type");
+          this.useContextCheckbox = document.getElementById("use-context");
+          this.debugLog = document.getElementById("debug-log");
+
+          // Initialize client with demo token (you'll need to get a real token)
+          this.client = new OmerutaBrainClient(
+            "http://localhost:8000/api",
+            this.getAuthToken() // You'll need to implement this
+          );
+
+          // Bind events
+          this.setupEventListeners();
+
+          this.log("Demo initialized. Ready to start.");
+        }
+
+        setupEventListeners() {
+          this.connectBtn.addEventListener("click", () => {
+            this.connectWebSocket();
+          });
+
+          this.sendBtn.addEventListener("click", () => {
+            this.sendMessage();
+          });
+
+          this.clearBtn.addEventListener("click", () => {
+            this.clearChat();
+          });
+
+          this.messageInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              this.sendMessage();
+            }
+          });
+
+          // Override client methods to update demo stats
+          const originalHandleChatCompletion =
+            this.client.handleChatCompletion.bind(this.client);
+          this.client.handleChatCompletion = (chatId, data) => {
+            this.activeTasks = Math.max(0, this.activeTasks - 1);
+            this.updateStats();
+
+            // Record response time
+            if (data.result && data.result.processing_time) {
+              this.responseTimes.push(data.result.processing_time);
+              if (this.responseTimes.length > 10) {
+                this.responseTimes = this.responseTimes.slice(-10);
+              }
+            }
+
+            return originalHandleChatCompletion(chatId, data);
+          };
+
+          const originalShowConnectionStatus =
+            this.client.showConnectionStatus.bind(this.client);
+          this.client.showConnectionStatus = (status, type) => {
+            this.updateConnectionStatus(status, type);
+            return originalShowConnectionStatus(status, type);
+          };
+        }
+
+        connectWebSocket() {
+          this.log("Connecting to WebSocket...");
+          this.connectBtn.disabled = true;
+          this.connectBtn.textContent = "Connecting...";
+
+          this.client.connectWebSocket();
+
+          // Re-enable button after a delay
+          setTimeout(() => {
+            this.connectBtn.disabled = false;
+            this.connectBtn.textContent = "Reconnect";
+          }, 2000);
+        }
+
+        async sendMessage() {
+          const message = this.messageInput.value.trim();
+          if (!message) return;
+
+          const options = {
+            agentType: this.agentTypeSelect.value,
+            useContext: this.useContextCheckbox.checked,
+          };
+
+          this.log(
+            `Sending message: "${message}" with agent: ${options.agentType}`
+          );
+
+          try {
+            this.sendBtn.disabled = true;
+            this.sendBtn.textContent = "Sending...";
+            this.activeTasks++;
+            this.messagesSent++;
+            this.updateStats();
+
+            await this.client.startChat(message, options);
+            this.messageInput.value = "";
+          } catch (error) {
+            this.log(`Error: ${error.message}`);
+            this.activeTasks = Math.max(0, this.activeTasks - 1);
+          } finally {
+            this.sendBtn.disabled = false;
+            this.sendBtn.textContent = "Send Message";
+            this.updateStats();
+          }
+        }
+
+        clearChat() {
+          const chatArea = document.getElementById("main-chat-area");
+          chatArea.innerHTML = "";
+          this.log("Chat cleared");
+        }
+
+        updateConnectionStatus(status, type) {
+          const statusEl = document.getElementById("connection-status");
+          const indicator =
+            type === "success" ? "🟢" : type === "error" ? "🔴" : "🟡";
+          statusEl.innerHTML = `${indicator} ${status}`;
+
+          // Update connection type stat
+          const connectionTypeEl = document.getElementById("connection-type");
+          if (type === "success") {
+            connectionTypeEl.textContent = "WebSocket";
+          } else {
+            connectionTypeEl.textContent = "Polling";
+          }
+
+          this.log(`Connection status: ${status} (${type})`);
+        }
+
+        updateStats() {
+          document.getElementById("messages-sent").textContent =
+            this.messagesSent;
+          document.getElementById("active-tasks").textContent =
+            this.activeTasks;
+
+          if (this.responseTimes.length > 0) {
+            const avgTime =
+              this.responseTimes.reduce((a, b) => a + b, 0) /
+              this.responseTimes.length;
+            document.getElementById("avg-response-time").textContent =
+              avgTime > 1
+                ? `${avgTime.toFixed(1)}s`
+                : `${Math.round(avgTime * 1000)}ms`;
+          }
+        }
+
+        log(message) {
+          const timestamp = new Date().toLocaleTimeString();
+          const logEl = this.debugLog;
+          logEl.innerHTML += `<br>[${timestamp}] ${message}`;
+          logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        getAuthToken() {
+          // In a real implementation, you'd get this from localStorage, cookies, or user login
+          // For demo purposes, you might need to hardcode a token or implement login
+          const token = localStorage.getItem("omeruta_auth_token");
+          if (!token) {
+            this.log(
+              "Warning: No auth token found. Some features may not work."
+            );
+            this.log(
+              'You may need to login first or set localStorage.setItem("omeruta_auth_token", "your_jwt_token")'
+            );
+          }
+          return token || "demo-token";
+        }
+      }
+
+      // Initialize demo when page loads
+      document.addEventListener("DOMContentLoaded", () => {
+        window.demo = new WebSocketDemo();
+      });
+
+      // Utility function to set auth token for testing
+      window.setAuthToken = function (token) {
+        localStorage.setItem("omeruta_auth_token", token);
+        console.log("Auth token set. Refresh the page to use it.");
+      };
+
+      // Show instructions
+      console.log(`
+🧠 Omeruta Brain WebSocket Demo
+
+To test with authentication:
+1. Get a JWT token from: POST /api/authentication/login/
+2. Run: setAuthToken('your_jwt_token_here')
+3. Refresh the page
+4. Click "Connect WebSocket" and start chatting!
+
+The demo will fall back to polling mode if WebSocket connection fails.
+        `);
+    </script>
+  </body>
+</html>
