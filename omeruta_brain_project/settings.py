@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     # Local apps
     "core",
     "authentication",
+    "crawler",
 ]
 
 MIDDLEWARE = [
