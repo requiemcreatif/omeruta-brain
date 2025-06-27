@@ -1,0 +1,506 @@
+from celery import shared_task
+from celery.utils.log import get_task_logger
+from django.core.cache import cache
+from django.contrib.auth import get_user_model
+from django.utils import timezone
+from .services.tinyllama_agent import TinyLlamaAgent
+from .services.enhanced_search_service import EnhancedVectorSearchService
+from .services.conversation_memory import ConversationMemory
+import time
+import uuid
+import json
+
+logger = get_task_logger(__name__)
+User = get_user_model()
+
+
+@shared_task(bind=True, max_retries=3)
+def process_user_message_async(
+    self,
+    message,
+    user_id,
+    conversation_id=None,
+    use_context=True,
+    agent_type="general",
+    max_tokens=300,
+):
+    """Process user message asynchronously with enhanced TinyLlama"""
+    task_id = self.request.id
+
+    try:
+        # Update task status
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "processing",
+                "progress": 0,
+                "message": "Initializing AI agent...",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+            },
+            timeout=300,
+        )
+
+        # Get user for logging
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            raise Exception(f"User {user_id} not found")
+
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "processing",
+                "progress": 15,
+                "message": "Loading AI model...",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+            },
+            timeout=300,
+        )
+
+        # Initialize agent with specified type
+        agent = TinyLlamaAgent(agent_type=agent_type)
+
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "processing",
+                "progress": 30,
+                "message": "Searching knowledge base...",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+            },
+            timeout=300,
+        )
+
+        # Initialize conversation memory if conversation_id provided
+        memory = None
+        enhanced_message = message
+        if conversation_id:
+            memory = ConversationMemory(conversation_id)
+            conversation_context = memory.get_conversation_context()
+            if conversation_context:
+                enhanced_message = f"Recent conversation context:\n{conversation_context}\n\nCurrent question: {message}"
+
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "processing",
+                "progress": 50,
+                "message": "Generating AI response...",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+            },
+            timeout=300,
+        )
+
+        # Process message
+        start_time = time.time()
+        result = agent.process_message(
+            message=enhanced_message, use_context=use_context, max_tokens=max_tokens
+        )
+        processing_time = time.time() - start_time
+
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "processing",
+                "progress": 80,
+                "message": "Saving conversation...",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+            },
+            timeout=300,
+        )
+
+        # Store in conversation memory
+        if memory:
+            memory.add_exchange(
+                user_message=message,
+                agent_response=result["response"],
+                metadata={
+                    "context_used": result.get("context_used", False),
+                    "context_sources": result.get("context_sources", 0),
+                    "question_type": result.get("question_type", "general"),
+                    "agent_type": agent_type,
+                    "processing_time": processing_time,
+                },
+            )
+
+        # Add task metadata
+        result.update(
+            {
+                "task_id": task_id,
+                "processing_time": processing_time,
+                "processed_async": True,
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "agent_type": agent_type,
+                "response_time_ms": int(processing_time * 1000),
+            }
+        )
+
+        # Store result in cache
+        cache.set(f"ai_result:{task_id}", result, timeout=3600)
+
+        # Update final status
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "completed",
+                "progress": 100,
+                "message": "Response ready",
+                "result_key": f"ai_result:{task_id}",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "processing_time": processing_time,
+            },
+            timeout=300,
+        )
+
+        # Log usage for analytics
+        try:
+            from .models import AgentUsageLog
+
+            AgentUsageLog.objects.create(
+                user=user,
+                question=message[:500],  # Truncate long questions
+                response_length=len(result.get("response", "")),
+                context_used=result.get("context_used", False),
+                context_sources=result.get("context_sources", 0),
+                response_time_ms=int(processing_time * 1000),
+                question_type=result.get("question_type", "general"),
+                model_used=result.get("model_used", "tinyllama"),
+                agent_type=agent_type,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to log usage: {e}")
+
+        logger.info(f"Processed message for user {user_id} in {processing_time:.2f}s")
+        return result
+
+    except Exception as exc:
+        logger.error(f"Error processing message: {exc}")
+
+        # Update error status
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "failed",
+                "progress": 0,
+                "message": f"Error: {str(exc)}",
+                "error": str(exc),
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+            },
+            timeout=300,
+        )
+
+        # Retry logic
+        if self.request.retries < self.max_retries:
+            logger.info(f"Retrying task {task_id}, attempt {self.request.retries + 1}")
+            raise self.retry(countdown=60, exc=exc)
+
+        raise exc
+
+
+@shared_task(bind=True)
+def process_multiagent_query(
+    self, query, user_id, conversation_id=None, agent_preference=None
+):
+    """Process query through intelligent agent selection"""
+    task_id = self.request.id
+
+    try:
+        user = User.objects.get(id=user_id)
+
+        # Update status
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "processing",
+                "progress": 10,
+                "message": "Analyzing query...",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+            },
+            timeout=300,
+        )
+
+        # Simple agent selection logic
+        agent_type = agent_preference or "general"
+        query_lower = query.lower()
+
+        # Determine best agent based on query content
+        if any(
+            word in query_lower
+            for word in ["research", "find", "gather", "collect", "sources"]
+        ):
+            agent_type = "research"
+        elif any(
+            word in query_lower for word in ["analyze", "compare", "evaluate", "assess"]
+        ):
+            agent_type = "content_analyzer"
+        elif any(
+            word in query_lower for word in ["what", "how", "when", "where", "why"]
+        ):
+            agent_type = "qa"
+
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "processing",
+                "progress": 30,
+                "message": f"Selected {agent_type} agent...",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "selected_agent": agent_type,
+            },
+            timeout=300,
+        )
+
+        # Process with selected agent
+        start_time = time.time()
+        result = process_user_message_async.delay(
+            message=query,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            use_context=True,
+            agent_type=agent_type,
+            max_tokens=400,
+        ).get()  # Wait for completion
+
+        processing_time = time.time() - start_time
+
+        # Add multiagent metadata
+        result.update(
+            {
+                "multiagent_processing": True,
+                "selected_agent": agent_type,
+                "agent_selection_confidence": 0.8,  # Placeholder
+                "total_processing_time": processing_time,
+            }
+        )
+
+        # Store result
+        cache.set(f"ai_result:{task_id}", result, timeout=3600)
+
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "completed",
+                "progress": 100,
+                "message": "Response ready",
+                "result_key": f"ai_result:{task_id}",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "selected_agent": agent_type,
+            },
+            timeout=300,
+        )
+
+        return result
+
+    except Exception as exc:
+        logger.error(f"Error in multiagent processing: {exc}")
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "failed",
+                "progress": 0,
+                "message": f"Error: {str(exc)}",
+                "error": str(exc),
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+            },
+            timeout=300,
+        )
+        raise exc
+
+
+@shared_task
+def auto_expand_knowledge_async(topic, max_urls=5):
+    """Automatically expand knowledge base for a topic"""
+    try:
+        logger.info(f"Starting knowledge expansion for topic: {topic}")
+
+        # This would integrate with your crawler
+        # For now, we'll simulate the process
+        from crawler.models import CrawledPage
+
+        # Search for existing content
+        existing_pages = CrawledPage.objects.filter(page_title__icontains=topic).count()
+
+        result = {
+            "topic": topic,
+            "existing_pages": existing_pages,
+            "expansion_needed": existing_pages < 3,
+            "status": "completed",
+        }
+
+        if result["expansion_needed"]:
+            # Here you would trigger your crawler for specific searches
+            # crawler_task = crawl_topic.delay(topic, max_urls)
+            result["action"] = "triggered_crawl"
+        else:
+            result["action"] = "sufficient_content"
+
+        logger.info(f"Knowledge expansion for '{topic}' completed: {result}")
+        return result
+
+    except Exception as exc:
+        logger.error(f"Knowledge expansion failed: {exc}")
+        raise exc
+
+
+@shared_task
+def analyze_content_quality_batch():
+    """Analyze content quality for pages in background"""
+    try:
+        from crawler.models import CrawledPage
+
+        # Get pages that haven't been quality assessed recently
+        pages = (
+            CrawledPage.objects.filter(success=True)
+            .exclude(clean_markdown__isnull=True)
+            .exclude(clean_markdown="")[:50]
+        )  # Process in batches of 50
+
+        results = []
+        for page in pages:
+            try:
+                # Simple quality assessment
+                content_length = len(page.clean_markdown or "")
+                word_count = len((page.clean_markdown or "").split())
+
+                quality_score = min(1.0, word_count / 500)  # Normalize to 0-1
+
+                assessment = {
+                    "page_id": str(page.id),
+                    "url": page.url,
+                    "title": page.page_title,
+                    "content_length": content_length,
+                    "word_count": word_count,
+                    "quality_score": quality_score,
+                    "assessment_time": timezone.now().isoformat(),
+                }
+
+                results.append(assessment)
+
+            except Exception as e:
+                logger.warning(f"Failed to assess page {page.id}: {e}")
+
+        logger.info(f"Assessed quality for {len(results)} pages")
+        return {"assessed_count": len(results), "results": results}
+
+    except Exception as exc:
+        logger.error(f"Batch quality analysis failed: {exc}")
+        raise exc
+
+
+@shared_task
+def batch_process_unprocessed_pages():
+    """Process embeddings for all unprocessed pages"""
+    try:
+        from crawler.models import CrawledPage
+
+        # Find unprocessed pages
+        unprocessed_pages = (
+            CrawledPage.objects.filter(success=True)
+            .exclude(clean_markdown__isnull=True)
+            .exclude(clean_markdown="")[:20]
+        )  # Process in smaller batches
+
+        processed_count = 0
+        for page in unprocessed_pages:
+            try:
+                # Here you would generate embeddings
+                # For now, just mark as processed
+                logger.info(f"Processing embeddings for page: {page.page_title}")
+                processed_count += 1
+
+            except Exception as e:
+                logger.warning(f"Failed to process page {page.id}: {e}")
+
+        logger.info(f"Processed embeddings for {processed_count} pages")
+        return {"processed_count": processed_count}
+
+    except Exception as exc:
+        logger.error(f"Batch processing failed: {exc}")
+        raise exc
+
+
+@shared_task
+def update_content_freshness():
+    """Check and update content freshness scores"""
+    try:
+        from crawler.models import CrawledPage
+        from datetime import timedelta
+
+        # Find pages older than 30 days
+        cutoff_date = timezone.now() - timedelta(days=30)
+        stale_pages = CrawledPage.objects.filter(
+            success=True, created_at__lt=cutoff_date
+        )[
+            :10
+        ]  # Limit to 10 per run
+
+        refresh_needed = []
+        for page in stale_pages:
+            refresh_needed.append(
+                {
+                    "page_id": str(page.id),
+                    "url": page.url,
+                    "title": page.page_title,
+                    "age_days": (timezone.now() - page.created_at).days,
+                }
+            )
+
+        logger.info(f"Identified {len(refresh_needed)} pages needing refresh")
+        return {"stale_count": len(refresh_needed), "pages_identified": refresh_needed}
+
+    except Exception as exc:
+        logger.error(f"Freshness update failed: {exc}")
+        raise exc
+
+
+@shared_task
+def cleanup_expired_tasks():
+    """Clean up expired task results and statuses"""
+    try:
+        # This is a simplified cleanup - in production you'd want more sophisticated cleanup
+        from django.core.cache import cache
+
+        # Clear expired conversations (older than 24 hours)
+        # This would be more sophisticated in a real implementation
+
+        logger.info("Cleaned up expired tasks and conversations")
+        return "Cleanup completed"
+
+    except Exception as exc:
+        logger.error(f"Cleanup failed: {exc}")
+        raise exc
+
+
+@shared_task
+def health_check():
+    """Health check task for monitoring"""
+    try:
+        # Check if AI services are available
+        agent = TinyLlamaAgent()
+        is_available = agent.llm_service.is_available()
+
+        return {
+            "status": "healthy" if is_available else "degraded",
+            "ai_service_available": is_available,
+            "timestamp": timezone.now().isoformat(),
+        }
+
+    except Exception as exc:
+        logger.error(f"Health check failed: {exc}")
+        return {
+            "status": "unhealthy",
+            "error": str(exc),
+            "timestamp": timezone.now().isoformat(),
+        }

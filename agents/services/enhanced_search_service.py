@@ -1,6 +1,7 @@
 from sentence_transformers import SentenceTransformer
 from typing import List, Dict, Any
 import numpy as np
+import torch
 from django.conf import settings
 from crawler.models import CrawledPage
 import logging
@@ -13,17 +14,37 @@ class EnhancedVectorSearchService:
 
     def __init__(self):
         self.embedding_model = None
+        # Detect device properly
+        if torch.cuda.is_available():
+            self.device = "cuda"
+        elif torch.backends.mps.is_available():
+            self.device = "cpu"  # Use CPU for embeddings on MPS to avoid issues
+        else:
+            self.device = "cpu"
         self._load_embedding_model()
 
     def _load_embedding_model(self):
         """Load local embedding model"""
         try:
             model_name = settings.VECTOR_SETTINGS["EMBEDDING_MODEL"]
-            self.embedding_model = SentenceTransformer(model_name)
-            logger.info(f"✅ Embedding model {model_name} loaded")
+
+            # Load with specific device configuration
+            self.embedding_model = SentenceTransformer(model_name, device=self.device)
+
+            logger.info(f"✅ Embedding model {model_name} loaded on {self.device}")
         except Exception as e:
             logger.error(f"❌ Failed to load embedding model: {e}")
-            self.embedding_model = None
+            # Fallback: try loading on CPU
+            try:
+                model_name = settings.VECTOR_SETTINGS["EMBEDDING_MODEL"]
+                self.embedding_model = SentenceTransformer(model_name, device="cpu")
+                self.device = "cpu"
+                logger.info(f"✅ Embedding model {model_name} loaded on CPU (fallback)")
+            except Exception as fallback_error:
+                logger.error(
+                    f"❌ Failed to load embedding model on CPU fallback: {fallback_error}"
+                )
+                self.embedding_model = None
 
     def search_crawled_content(
         self, query: str, limit: int = 5, threshold: float = 0.5

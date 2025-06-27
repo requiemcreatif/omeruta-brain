@@ -54,6 +54,11 @@ INSTALLED_APPS = [
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
+    # Celery apps
+    "django_celery_beat",
+    "django_celery_results",
+    # WebSocket support
+    "channels",
     # Local apps
     "core",
     "authentication",
@@ -91,6 +96,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "omeruta_brain_project.wsgi.application"
+ASGI_APPLICATION = "omeruta_brain_project.asgi.application"
 
 
 # Database
@@ -144,6 +150,11 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+
+# Additional static files directories for development
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "static"),
+]
 
 # Media files
 MEDIA_URL = "/media/"
@@ -273,4 +284,39 @@ VECTOR_SETTINGS = {
     "CHUNK_OVERLAP": 100,
     "SIMILARITY_THRESHOLD": 0.7,
     "MAX_CONTEXT_TOKENS": 2000,
+}
+
+# Celery Configuration
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
+
+# Celery Beat Configuration (for periodic tasks)
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+
+# Cache Configuration (for task status and conversation memory)
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+        "KEY_PREFIX": "omeruta_brain",
+        "TIMEOUT": 300,  # 5 minutes default
+    }
+}
+
+# Channel Layers Configuration (for WebSocket support)
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [REDIS_URL],
+        },
+    },
 }

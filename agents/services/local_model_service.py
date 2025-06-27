@@ -15,7 +15,13 @@ class TinyLlamaService:
         self.model = None
         self.tokenizer = None
         self.pipeline = None
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        # Properly detect device with MPS support
+        if torch.cuda.is_available():
+            self.device = "cuda"
+        elif torch.backends.mps.is_available():
+            self.device = "mps"
+        else:
+            self.device = "cpu"
         self.model_loaded = False
         self.max_retries = 3
 
@@ -34,29 +40,50 @@ class TinyLlamaService:
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
 
-            # Load model with memory optimization
-            model_kwargs = {
-                "torch_dtype": (
-                    torch.float16 if self.device == "cuda" else torch.float32
-                ),
-                "low_cpu_mem_usage": True,
-            }
-
+            # Load model with proper device handling
             if self.device == "cuda":
-                model_kwargs["device_map"] = "auto"
+                model_kwargs = {
+                    "torch_dtype": torch.float16,
+                    "low_cpu_mem_usage": True,
+                    "device_map": "auto",
+                }
+            elif self.device == "mps":
+                model_kwargs = {
+                    "torch_dtype": torch.float32,  # MPS works better with float32
+                    "low_cpu_mem_usage": True,
+                }
+            else:
+                model_kwargs = {
+                    "torch_dtype": torch.float32,
+                    "low_cpu_mem_usage": True,
+                }
 
+            # Load model without automatic device mapping for MPS
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name, **model_kwargs
             )
 
-            # Create pipeline
-            self.pipeline = pipeline(
-                "text-generation",
-                model=self.model,
-                tokenizer=self.tokenizer,
-                device_map="auto" if self.device == "cuda" else None,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-            )
+            # Move model to device after loading (except for CUDA with device_map)
+            if self.device != "cuda":
+                self.model = self.model.to(self.device)
+
+            # Create pipeline with proper device configuration
+            if self.device == "cuda":
+                self.pipeline = pipeline(
+                    "text-generation",
+                    model=self.model,
+                    tokenizer=self.tokenizer,
+                    device_map="auto",
+                    torch_dtype=torch.float16,
+                )
+            else:
+                self.pipeline = pipeline(
+                    "text-generation",
+                    model=self.model,
+                    tokenizer=self.tokenizer,
+                    device=0 if self.device == "mps" else -1,  # 0 for MPS, -1 for CPU
+                    torch_dtype=torch.float32,
+                )
 
             self.model_loaded = True
             logger.info("✅ TinyLlama loaded successfully!")
@@ -145,6 +172,8 @@ class TinyLlamaService:
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+        elif torch.backends.mps.is_available():
+            torch.mps.empty_cache()
 
         logger.info("🧹 Model cleaned from memory")
 

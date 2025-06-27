@@ -14,18 +14,96 @@ class TinyLlamaAgent:
         self.agent_type = agent_type
         self.llm_service = TinyLlamaService()
         self.search_service = EnhancedVectorSearchService()
+
+        # Enhanced system prompts based on your domain
         self.system_prompts = {
-            "general": "You are a helpful AI assistant. Answer questions accurately and concisely based on the provided context.",
-            "research": "You are a research assistant. Help users find and analyze information from the knowledge base.",
-            "qa": "You are a Q&A assistant. Provide direct, accurate answers to user questions using the available context.",
+            "general": """You are Omeruta Brain, an intelligent AI assistant with access to a curated knowledge base.
+            Answer questions accurately and cite your sources when using provided context.
+            If you don't know something, say so clearly.""",
+            "research": """You are a research specialist within Omeruta Brain. You excel at:
+            - Analyzing and synthesizing information from multiple sources
+            - Identifying key insights and patterns
+            - Providing comprehensive yet concise summaries
+            - Suggesting related topics for further exploration""",
+            "qa": """You are a Q&A specialist within Omeruta Brain. You provide:
+            - Direct, accurate answers to specific questions
+            - Clear explanations with examples when helpful
+            - Citations to sources when using provided context
+            - Honest acknowledgment when information is not available""",
+            "content_analyzer": """You are a content analysis specialist within Omeruta Brain. You:
+            - Analyze the quality and credibility of information
+            - Compare different perspectives on topics
+            - Identify biases or gaps in content
+            - Summarize key themes and insights""",
         }
+
+    def _classify_question_type(self, message: str) -> str:
+        """Classify the type of question for better handling"""
+        message_lower = message.lower()
+
+        # Factual questions - need context
+        factual_keywords = [
+            "what is",
+            "what are",
+            "how does",
+            "explain",
+            "define",
+            "tell me about",
+        ]
+        if any(keyword in message_lower for keyword in factual_keywords):
+            return "factual"
+
+        # Analytical questions - may need context
+        analytical_keywords = [
+            "compare",
+            "analyze",
+            "evaluate",
+            "pros and cons",
+            "advantages",
+            "disadvantages",
+        ]
+        if any(keyword in message_lower for keyword in analytical_keywords):
+            return "analytical"
+
+        # Procedural questions - may need context
+        procedural_keywords = ["how to", "steps", "process", "procedure", "guide"]
+        if any(keyword in message_lower for keyword in procedural_keywords):
+            return "procedural"
+
+        # Opinion/creative questions - usually don't need context
+        opinion_keywords = ["think", "opinion", "believe", "feel", "create", "generate"]
+        if any(keyword in message_lower for keyword in opinion_keywords):
+            return "opinion"
+
+        return "general"
+
+    def _needs_context(self, message: str) -> bool:
+        """Enhanced context detection"""
+        question_type = self._classify_question_type(message)
+
+        # These question types typically benefit from context
+        context_types = ["factual", "analytical", "procedural"]
+
+        # Also check for specific domain keywords from your crawled content
+        domain_keywords = [
+            "cryptocurrency",
+            "bitcoin",
+            "blockchain",
+            "digital currency",
+            "tech",
+            "technology",
+        ]
+        has_domain_keywords = any(
+            keyword in message.lower() for keyword in domain_keywords
+        )
+
+        return question_type in context_types or has_domain_keywords
 
     def process_message(
         self, message: str, use_context: bool = True, max_tokens: int = 300
     ) -> Dict[str, Any]:
-        """Process user message and generate response"""
+        """Enhanced message processing with better context handling"""
 
-        # Check if model is available
         if not self.llm_service.is_available():
             return {
                 "response": "Local model is not available. Please check the setup.",
@@ -35,7 +113,7 @@ class TinyLlamaAgent:
             }
 
         try:
-            # Get relevant context from your crawled data
+            # Enhanced context retrieval
             context = ""
             context_used = False
             context_sources = 0
@@ -47,24 +125,32 @@ class TinyLlamaAgent:
                     context_used = bool(context)
                     context_sources = len(search_results)
 
-            # Prepare the full prompt
-            system_prompt = self.system_prompts.get(
+            # Get question type for appropriate system prompt
+            question_type = self._classify_question_type(message)
+            base_prompt = self.system_prompts.get(
                 self.agent_type, self.system_prompts["general"]
             )
 
             if context:
-                enhanced_prompt = f"""{system_prompt}
+                enhanced_prompt = f"""{base_prompt}
 
 Context from knowledge base:
 {context}
 
-Please answer the user's question based on the context above. If the context doesn't contain relevant information, say so clearly."""
+Please answer the user's question based on the context above. If the context doesn't contain relevant information, say so clearly and provide what you know from your general knowledge."""
             else:
-                enhanced_prompt = system_prompt
+                enhanced_prompt = base_prompt
 
-            # Generate response
+            # Generate response with appropriate max_tokens based on question complexity
+            if question_type in ["analytical", "procedural"]:
+                max_tokens = min(
+                    int(max_tokens * 1.5), 500
+                )  # Longer responses for complex questions
+
             response = self.llm_service.generate_response(
-                prompt=message, max_tokens=max_tokens, system_prompt=enhanced_prompt
+                prompt=message,
+                max_tokens=int(max_tokens),
+                system_prompt=enhanced_prompt,
             )
 
             if response is None:
@@ -81,6 +167,7 @@ Please answer the user's question based on the context above. If the context doe
                 "model_used": "tinyllama",
                 "context_used": context_used,
                 "context_sources": context_sources,
+                "question_type": question_type,
                 "model_info": self.llm_service.get_model_info(),
             }
 
@@ -93,23 +180,6 @@ Please answer the user's question based on the context above. If the context doe
                 "context_sources": 0,
                 "error": str(e),
             }
-
-    def _needs_context(self, message: str) -> bool:
-        """Determine if message needs knowledge base context"""
-        # Simple heuristic - can be enhanced
-        context_keywords = [
-            "what",
-            "how",
-            "explain",
-            "tell me about",
-            "information about",
-            "details",
-            "describe",
-            "summary",
-            "definition",
-        ]
-        message_lower = message.lower()
-        return any(keyword in message_lower for keyword in context_keywords)
 
     def get_available_knowledge_stats(self) -> Dict[str, Any]:
         """Get stats about available knowledge base"""
