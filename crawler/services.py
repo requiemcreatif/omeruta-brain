@@ -147,12 +147,12 @@ class CrawlerService:
                 # Extract metadata
                 if result.metadata:
                     metadata = result.metadata
-                    page.title = metadata.get("title", "")[:500]
-                    page.meta_description = metadata.get("description", "")
-                    page.meta_keywords = metadata.get("keywords", "")
-                    page.author = metadata.get("author", "")
-                    page.language = metadata.get("language", "")
-                    page.content_type = metadata.get("content-type", "")
+                    page.title = (metadata.get("title") or "")[:500]
+                    page.meta_description = metadata.get("description") or ""
+                    page.meta_keywords = metadata.get("keywords") or ""
+                    page.author = metadata.get("author") or ""
+                    page.language = metadata.get("language") or ""
+                    page.content_type = metadata.get("content-type") or ""
 
                 # Extract links
                 if result.links:
@@ -338,7 +338,9 @@ class CrawlerService:
 
             pages = []
             config_options = {
-                "cache_mode": "enabled" if crawl_job.use_cache else "bypass"
+                "cache_mode": "enabled" if crawl_job.use_cache else "bypass",
+                "use_content_filter": True,
+                "filter_type": "pruning",
             }
 
             # Execute crawl based on strategy
