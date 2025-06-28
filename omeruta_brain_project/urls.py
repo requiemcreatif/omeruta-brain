@@ -26,9 +26,9 @@ urlpatterns = [
     path("", auth_views.UserLoginView.as_view(), name="home"),
     path("admin/", admin.site.urls),
     path("api/", include("core.urls")),
+    path("ai/", include("agents.urls")),
     path("api/auth/", include("authentication.urls")),
     path("api/crawler/", include("crawler.urls")),
-    path("api/agents/", include("agents.urls")),
     path("accounts/", include("allauth.urls")),
     path("__reload__/", include("django_browser_reload.urls")),
     # Redirect /login to the home page

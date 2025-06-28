@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 import asyncio
 import logging
 from typing import Dict, Any
@@ -8,6 +8,8 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
 from django.contrib.auth.decorators import login_required
+from django.urls import reverse
+import threading
 
 from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes
@@ -15,6 +17,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.pagination import PageNumberPagination
+from django.views.generic import TemplateView
+from django.views import View
 
 from .models import CrawlJob, CrawledPage, CrawlStatistics
 from .serializers import (
@@ -30,8 +34,94 @@ from .serializers import (
     BulkContentExtractionResponseSerializer,
 )
 from .services import CrawlerService
+from .forms import CrawlJobForm
 
 logger = logging.getLogger(__name__)
+
+
+class CrawlerTemplateView(View):
+    template_name = "crawler/crawler.html"
+    form_class = CrawlJobForm
+
+    def get(self, request, *args, **kwargs):
+        form = self.form_class()
+        crawl_jobs = CrawlJob.objects.filter(created_by=request.user).order_by(
+            "-created_at"
+        )
+
+        selected_job_id = request.GET.get("job_id")
+        selected_page_id = request.GET.get("page_id")
+
+        crawled_pages = []
+        selected_page = None
+        job = None
+
+        if selected_job_id:
+            try:
+                job = CrawlJob.objects.get(id=selected_job_id, created_by=request.user)
+                crawled_pages = CrawledPage.objects.filter(crawl_job=job).order_by(
+                    "-crawled_at"
+                )
+                if not selected_page_id and crawled_pages.exists():
+                    selected_page_id = crawled_pages.first().id
+            except CrawlJob.DoesNotExist:
+                selected_job_id = None
+
+        if selected_page_id:
+            try:
+                selected_page = CrawledPage.objects.get(id=selected_page_id)
+                if selected_page.crawl_job.created_by != request.user:
+                    selected_page = None
+            except CrawledPage.DoesNotExist:
+                selected_page = None
+
+        context = {
+            "form": form,
+            "crawl_jobs": crawl_jobs,
+            "selected_job_id": selected_job_id,
+            "selected_job": job,
+            "crawled_pages": crawled_pages,
+            "selected_page": selected_page,
+        }
+        return render(request, self.template_name, context)
+
+    def post(self, request, *args, **kwargs):
+        form = self.form_class(request.POST)
+        if form.is_valid():
+            data = form.cleaned_data
+            url_list = data["urls"].splitlines()
+            url_list = [url.strip() for url in url_list if url.strip()]
+
+            crawl_job = CrawlJob.objects.create(
+                start_urls=url_list,
+                strategy=data["strategy"],
+                max_pages=data["max_pages"],
+                max_depth=data["max_depth"],
+                delay_between_requests=data["delay_between_requests"],
+                created_by=request.user,
+            )
+
+            def run_crawl_job():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                crawler_service = CrawlerService()
+                loop.run_until_complete(crawler_service.execute_crawl_job(crawl_job))
+                loop.close()
+
+            thread = threading.Thread(target=run_crawl_job)
+            thread.daemon = True
+            thread.start()
+
+            return redirect(f"{reverse('crawler:crawler_page')}?job_id={crawl_job.id}")
+
+        crawl_jobs = CrawlJob.objects.filter(created_by=request.user).order_by(
+            "-created_at"
+        )
+        context = {
+            "form": form,
+            "crawl_jobs": crawl_jobs,
+        }
+        return render(request, self.template_name, context)
 
 
 class StandardResultsSetPagination(PageNumberPagination):

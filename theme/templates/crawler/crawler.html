@@ -1,0 +1,93 @@
+{% extends "core/dashboard.html" %}
+{% load static %}
+
+{% block title %}Web Crawler{% endblock %}
+
+{% block content %}
+<div class="mx-auto p-6 space-y-8">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+        <!-- Left Column -->
+        <div class="space-y-6">
+            <!-- Crawl Configuration -->
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+                <div class="p-4 border-b border-gray-200 dark:border-gray-600">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Crawl Configuration</h2>
+                </div>
+                <form method="post" class="p-4 space-y-4">
+                    {% csrf_token %}
+                    <div>
+                        <label for="{{ form.urls.id_for_label }}" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ form.urls.label }}</label>
+                        {{ form.urls }}
+                        {% if form.urls.errors %}<p class="text-red-500 text-xs mt-1">{{ form.urls.errors.as_text }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label for="{{ form.strategy.id_for_label }}" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ form.strategy.label }}</label>
+                        {{ form.strategy }}
+                        {% if form.strategy.errors %}<p class="text-red-500 text-xs mt-1">{{ form.strategy.errors.as_text }}</p>{% endif %}
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="{{ form.max_pages.id_for_label }}" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ form.max_pages.label }}</label>
+                            {{ form.max_pages }}
+                            {% if form.max_pages.errors %}<p class="text-red-500 text-xs mt-1">{{ form.max_pages.errors.as_text }}</p>{% endif %}
+                        </div>
+                        <div>
+                            <label for="{{ form.max_depth.id_for_label }}" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ form.max_depth.label }}</label>
+                            {{ form.max_depth }}
+                            {% if form.max_depth.errors %}<p class="text-red-500 text-xs mt-1">{{ form.max_depth.errors.as_text }}</p>{% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        <label for="{{ form.delay_between_requests.id_for_label }}" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ form.delay_between_requests.label }}</label>
+                        {{ form.delay_between_requests }}
+                        {% if form.delay_between_requests.errors %}<p class="text-red-500 text-xs mt-1">{{ form.delay_between_requests.errors.as_text }}</p>{% endif %}
+                    </div>
+                    <button type="submit" id="start-crawl-btn" class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">Start Crawl</button>
+                </form>
+            </div>
+
+            <!-- Crawl History -->
+            {% include 'crawler/partials/history.html' %}
+        </div>
+
+        <!-- Right Column: Results Panel -->
+        {% include 'crawler/partials/results.html' %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectedJobId = '{{ selected_job_id }}';
+    const selectedJobStatus = '{{ selected_job.status }}';
+
+    if (selectedJobId && (selectedJobStatus === 'running' || selectedJobStatus === 'pending')) {
+        const startButton = document.getElementById('start-crawl-btn');
+        if(startButton) {
+            startButton.disabled = true;
+            startButton.textContent = 'Crawling in progress...';
+        }
+
+        const pollJobStatus = () => {
+            fetch(`/api/crawler/jobs/${selectedJobId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
+                        // Reload the page to show the final status and results
+                        window.location.reload();
+                    } else {
+                        // Continue polling
+                        setTimeout(pollJobStatus, 5000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error polling job status:', error);
+                    // Stop polling on error
+                });
+        };
+
+        // Start polling
+        setTimeout(pollJobStatus, 5000);
+    }
+});
+</script>
+{% endblock %}

@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    CrawlerTemplateView,
     CrawlJobListView,
     CrawlJobDetailView,
     CrawlJobCreateView,
@@ -19,6 +20,8 @@ from .views import (
 app_name = "crawler"
 
 urlpatterns = [
+    # Crawler page
+    path("", CrawlerTemplateView.as_view(), name="crawler_page"),
     # Health check and stats
     path("health/", crawler_health_check, name="health_check"),
     path("stats/", crawler_stats_summary, name="stats_summary"),

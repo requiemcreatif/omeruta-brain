@@ -14,8 +14,13 @@ from celery.result import AsyncResult
 from django.core.cache import cache
 import time
 import logging
+from django.views.generic import TemplateView
 
 logger = logging.getLogger(__name__)
+
+
+class AIAssistantView(TemplateView):
+    template_name = "agents/ai_assistant.html"
 
 
 class TinyLlamaViewSet(viewsets.GenericViewSet):
