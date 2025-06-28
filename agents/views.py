@@ -20,6 +20,8 @@ import time
 import logging
 from django.views import View
 from django.shortcuts import render
+from .services.live_research_agent import LiveResearchAgent
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -608,6 +610,89 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
             logger.error(f"Get context error: {e}")
             return Response(
                 {"error": f"Failed to get context: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=False, methods=["post"])
+    def live_research(self, request):
+        """Conduct live internet research on a topic"""
+        try:
+            data = request.data
+            research_topic = data.get("topic", "").strip()
+
+            if not research_topic:
+                return Response(
+                    {"error": "Research topic is required"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Configuration options
+            config = {
+                "max_sources": data.get("max_sources", 8),
+                "include_local_kb": data.get("include_local_kb", True),
+                "research_depth": data.get("research_depth", "comprehensive"),
+                "use_live_research": data.get("use_live_research", True),
+            }
+
+            # Initialize live research agent
+            live_research_agent = LiveResearchAgent()
+
+            # Conduct research asynchronously
+            async def conduct_research():
+                return await live_research_agent.enhanced_research_chat(
+                    message=research_topic,
+                    use_live_research=config["use_live_research"],
+                    max_sources=config["max_sources"],
+                    research_depth=config["research_depth"],
+                )
+
+            # Run async research
+            import asyncio
+
+            result = asyncio.run(conduct_research())
+
+            # Add processing metadata
+            result.update(
+                {
+                    "processing_time_ms": int(
+                        result.get("research_methodology", {}).get(
+                            "research_time_seconds", 0
+                        )
+                        * 1000
+                    ),
+                    "conversation_id": data.get("conversation_id"),
+                    "timestamp": timezone.now().isoformat(),
+                    "research_topic": research_topic,
+                    "config_used": config,
+                }
+            )
+
+            return Response(result, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Live research error: {e}", exc_info=True)
+            return Response(
+                {
+                    "error": "Live research failed",
+                    "details": str(e),
+                    "response": "I encountered an error while conducting live research. Please try again or use a different research topic.",
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=False, methods=["get"])
+    def research_capabilities(self, request):
+        """Get information about research capabilities"""
+        try:
+            live_research_agent = LiveResearchAgent()
+            capabilities = live_research_agent.get_research_capabilities()
+
+            return Response(capabilities, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Error getting research capabilities: {e}", exc_info=True)
+            return Response(
+                {"error": "Failed to get research capabilities"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 

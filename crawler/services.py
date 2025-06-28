@@ -79,7 +79,7 @@ class CrawlerService:
         if use_content_filter:
             if filter_type == "bm25" and user_query:
                 content_filter = BM25ContentFilter(
-                    user_query=user_query, bm25_threshold=1.0, use_stemming=True
+                    user_query=user_query, bm25_threshold=1.0
                 )
             else:
                 # Default to pruning filter for general content cleaning

@@ -57,6 +57,7 @@
                     {% for type in initial_status.available_agent_types %}
                     <option value="{{ type.value }}" {% if type.value == initial_status.agent_type %}selected{% endif %}>{{ type.name }}</option>
                     {% endfor %}
+                    <option value="live_research">🌐 Live Research (Internet)</option>
                 </select>
             </div>
             <div class="space-y-2">
@@ -74,8 +75,30 @@
             </div>
         </div>
         
+        <!-- Live Research Settings -->
+        <div id="live-research-settings" class="space-y-3 pt-2 border-t border-gray-600 hidden">
+            <h4 class="text-sm font-medium text-gray-300">🌐 Live Research Settings</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-2">
+                    <label for="max-sources-input" class="text-sm font-medium text-gray-300">Max Sources</label>
+                    <input id="max-sources-input" type="number" value="8" min="3" max="15" step="1" class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                </div>
+                <div class="space-y-2">
+                    <label for="research-depth-select" class="text-sm font-medium text-gray-300">Research Depth</label>
+                    <select id="research-depth-select" class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                        <option value="comprehensive" selected>Comprehensive</option>
+                        <option value="focused">Focused</option>
+                        <option value="rapid">Rapid</option>
+                    </select>
+                </div>
+            </div>
+            <div class="text-xs text-gray-500">
+                💡 <strong>How it works:</strong> Your message becomes the research topic. Sources are automatically selected based on detected categories (politics, tech, health, etc.)
+            </div>
+        </div>
+
         <!-- Enhanced RAG Settings -->
-        <div class="space-y-3 pt-2 border-t border-gray-600">
+        <div id="rag-settings" class="space-y-3 pt-2 border-t border-gray-600">
             <h4 class="text-sm font-medium text-gray-300">🧠 Enhanced RAG Settings</h4>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="space-y-2">
@@ -232,6 +255,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const qualityThresholdValue = document.getElementById('quality-threshold-value');
     const refreshStatsBtn = document.getElementById('refresh-stats-btn');
     
+    // Live research settings elements
+    const liveResearchSettings = document.getElementById('live-research-settings');
+    const ragSettings = document.getElementById('rag-settings');
+    const maxSourcesInput = document.getElementById('max-sources-input');
+    const researchDepthSelect = document.getElementById('research-depth-select');
+    
     // Agent type visual map
     const agentVisuals = {
         general: { 
@@ -241,6 +270,10 @@ document.addEventListener('DOMContentLoaded', function() {
         research: { 
             color: 'text-purple-400', 
             icon: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>` 
+        },
+        live_research: { 
+            color: 'text-cyan-400', 
+            icon: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>` 
         },
         qa: { 
             color: 'text-green-400', 
@@ -386,15 +419,29 @@ document.addEventListener('DOMContentLoaded', function() {
                 `;
             }
 
+            // Live research specific metadata
+            let researchHtml = '';
+            if (metadata.live_research_conducted) {
+                researchHtml = `
+                    <div class="mt-1 flex flex-wrap gap-1">
+                        <span class="px-2 py-1 bg-cyan-600/20 text-cyan-400 rounded text-xs">🌐 Live Research</span>
+                        ${metadata.live_sources_used ? `<span class="px-2 py-1 bg-green-600/20 text-green-400 rounded text-xs">Web: ${metadata.live_sources_used}</span>` : ''}
+                        ${metadata.local_sources_used ? `<span class="px-2 py-1 bg-blue-600/20 text-blue-400 rounded text-xs">Local: ${metadata.local_sources_used}</span>` : ''}
+                        ${metadata.research_methodology ? `<span class="px-2 py-1 bg-purple-600/20 text-purple-400 rounded text-xs">Queries: ${metadata.research_methodology.search_queries_used ? metadata.research_methodology.search_queries_used.length : 0}</span>` : ''}
+                    </div>
+                `;
+            }
+
             metaHtml = `
                 <div class="mt-2 pt-2 border-t border-gray-600 text-xs text-gray-400">
                     <div class="flex flex-wrap items-center gap-2">
                         ${metadata.model_used ? `<span>${metadata.model_used}</span>` : ''}
                         ${metadata.context_used ? `<span class="text-green-400">📚 ${metadata.context_sources || 0} sources</span>` : ''}
                         ${metadata.response_time_ms ? `<span class="text-yellow-400">⚡ ${(metadata.response_time_ms / 1000).toFixed(2)}s</span>` : ''}
-                        ${metadata.agent_type ? `<span class="text-blue-400 capitalize">${metadata.agent_type}</span>` : ''}
+                        ${metadata.agent_type ? `<span class="text-blue-400 capitalize">${metadata.agent_type.replace('_', ' ')}</span>` : ''}
                         ${metadata.search_metadata && metadata.search_metadata.used_cross_encoder ? `<span class="text-purple-400">🎯 Re-ranked</span>` : ''}
                     </div>
+                    ${researchHtml}
                     ${qualityHtml}
                     ${sourcesHtml}
                 </div>
@@ -508,11 +555,60 @@ document.addEventListener('DOMContentLoaded', function() {
                 const chatId = await client.startChat(message, options);
                 if (!conversationId) conversationId = chatId;
             } else {
+                // Check if this is live research
+                if (currentAgentType === 'live_research') {
+                    // Use live research endpoint
+                    showProgress('🌐 Conducting live internet research...', 5);
+                    
+                    // Add research topic indicator
+                    console.log(`🔍 Live Research Topic: "${message}"`);
+                    console.log(`📊 Research will automatically select sources based on topic category`);
+                    const response = await fetch('/ai/api/agents/tinyllama/live_research/', {
+                        method: 'POST',
+                        headers: window.getAuthHeaders ? window.getAuthHeaders() : {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: JSON.stringify({
+                            topic: message,
+                            max_sources: parseInt(maxSourcesInput.value, 10),
+                            include_local_kb: useContextCheckbox.checked,
+                            research_depth: researchDepthSelect.value,
+                            use_live_research: true,
+                            conversation_id: conversationId || null
+                        })
+                    });
+
+                    hideProgress();
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Live research failed.');
+                    }
+
+                    // Enhanced response with research metadata
+                    const metadata = {
+                        model_used: data.model_used,
+                        context_used: data.live_sources_used > 0 || data.local_sources_used > 0,
+                        context_sources: (data.live_sources_used || 0) + (data.local_sources_used || 0),
+                        response_time_ms: data.processing_time_ms,
+                        agent_type: 'live_research',
+                        quality_scores: data.quality_metrics,
+                        sources: data.sources,
+                        research_methodology: data.research_methodology,
+                        live_research_conducted: data.research_conducted,
+                        live_sources_used: data.live_sources_used,
+                        local_sources_used: data.local_sources_used
+                    };
+
+                    addMessageToUI('assistant', data.response, metadata);
+                    setUIState(false);
+            } else {
                 // Fallback to enhanced HTTP endpoint
                 showProgress('Processing with enhanced RAG...', 10);
                 const response = await fetch('/ai/api/agents/tinyllama/enhanced_chat/', {
                     method: 'POST',
-                    headers: window.getAuthHeaders ? window.getAuthHeaders() : {
+                        headers: window.getAuthHeaders ? window.getAuthHeaders() : {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': '{{ csrf_token }}'
                     },
@@ -553,6 +649,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     search_metadata: data.search_metadata
                 });
                 setUIState(false);
+                }
             }
         } catch (err) {
             hideProgress();
@@ -592,8 +689,28 @@ document.addEventListener('DOMContentLoaded', function() {
             const visual = agentVisuals[newType] || agentVisuals.general;
             document.getElementById('agent-icon-header').innerHTML = visual.icon;
             document.getElementById('agent-icon-header').className = visual.color;
-            document.getElementById('agent-type-header').textContent = newType.charAt(0).toUpperCase() + newType.slice(1).replace('_', ' ');
+            const displayName = newType === 'live_research' ? 'Live Research' : newType.charAt(0).toUpperCase() + newType.slice(1).replace('_', ' ');
+            document.getElementById('agent-type-header').textContent = displayName;
             document.getElementById('agent-type-header').className = `font-medium capitalize ${visual.color}`;
+            
+            // Update placeholder based on agent type
+            const placeholders = {
+                'live_research': 'Research any topic... (e.g., "Current US president 2025", "Latest AI news")',
+                'research': 'Ask about your knowledge base...',
+                'qa': 'Ask a question...',
+                'content_analyzer': 'Analyze content...',
+                'general': 'Ask anything...'
+            };
+            messageInput.placeholder = placeholders[newType] || placeholders.general;
+            
+            // Show/hide appropriate settings panels
+            if (newType === 'live_research') {
+                liveResearchSettings.classList.remove('hidden');
+                ragSettings.classList.add('hidden');
+            } else {
+                liveResearchSettings.classList.add('hidden');
+                ragSettings.classList.remove('hidden');
+            }
             
             // No need to call server - we'll use the new type in the next message
             console.log(`Agent type changed to: ${newType}`);
@@ -690,6 +807,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if (websocketEnabled) {
         initializeWebSocket();
     }
+    
+    // Initialize agent type-specific UI
+    changeAgentType(currentAgentType);
+    
     setUIState(false);
     autoResizeTextarea();
 });

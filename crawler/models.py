@@ -165,7 +165,7 @@ class CrawledPage(models.Model):
 
         content = self.get_content_for_vector_db()
         if content:
-            self.content_hash = hashlib.sha256(content.encode()).hexdigest()
+            self.content_hash = hashlib.sha256(str(content).encode()).hexdigest()
 
     def save(self, *args, **kwargs):
         # Update content hash before saving
@@ -174,7 +174,7 @@ class CrawledPage(models.Model):
         # Update word count
         content = self.get_content_for_vector_db()
         if content:
-            self.word_count = len(content.split())
+            self.word_count = len(str(content).split())
 
         super().save(*args, **kwargs)
 
@@ -223,13 +223,15 @@ class CrawlStatistics(models.Model):
 
     def calculate_statistics(self):
         """Calculate and update statistics based on crawled pages"""
-        pages = self.crawl_job.pages.filter(success=True)
+        from .models import CrawledPage
+
+        pages = CrawledPage.objects.filter(crawl_job=self.crawl_job, success=True)
 
         if pages.exists():
             # Content statistics
             self.total_words = sum(page.word_count for page in pages)
             self.total_characters = sum(
-                len(page.get_content_for_vector_db()) for page in pages
+                len(str(page.get_content_for_vector_db())) for page in pages
             )
             self.average_words_per_page = self.total_words / pages.count()
 
@@ -245,7 +247,7 @@ class CrawlStatistics(models.Model):
                 self.average_response_time = sum(response_times) / len(response_times)
 
             # Success rate
-            total_pages = self.crawl_job.pages.count()
+            total_pages = CrawledPage.objects.filter(crawl_job=self.crawl_job).count()
             if total_pages > 0:
                 self.success_rate = (pages.count() / total_pages) * 100
 
