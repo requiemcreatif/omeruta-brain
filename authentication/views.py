@@ -9,6 +9,7 @@ from django.contrib.auth import get_user_model, login, logout
 from django.contrib.auth.decorators import user_passes_test
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+from django.views import View
 
 from .serializers import (
     UserRegistrationSerializer,
@@ -47,7 +48,17 @@ class UserRegistrationView(generics.CreateAPIView):
 
 
 class UserLoginView(APIView):
+    """
+    Handle user login for both API and template views.
+    """
+
     permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        """
+        Renders the login page.
+        """
+        return render(request, "authentication/login.html")
 
     def post(self, request):
         serializer = UserLoginSerializer(data=request.data)

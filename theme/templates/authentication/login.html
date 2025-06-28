@@ -1,0 +1,139 @@
+{% load static tailwind_tags %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login - Omeruta Brain</title>
+    {% tailwind_css %}
+  </head>
+  <body class="bg-black">
+    <div class="min-h-screen flex items-center justify-center p-4">
+      <div class="w-full max-w-md">
+        <!-- Header -->
+        <div class="text-center mb-12">
+          <h1 class="text-4xl font-light text-white mb-3">Omeruta Brain</h1>
+          <p class="text-gray-500 text-sm">Sign in to continue</p>
+        </div>
+
+        <!-- Connection Status -->
+        <div class="mb-8">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-gray-500">Backend</span>
+            <span class="text-green-500">● Connected</span>
+          </div>
+        </div>
+
+        <!-- Login Form -->
+        <form method="post" class="space-y-6">
+          {% csrf_token %}
+          <!-- Email Field -->
+          <div>
+            <label for="email" class="block text-sm text-gray-300 mb-2">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              name="email"
+              class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-none focus:border-white transition-colors"
+              placeholder="Enter your email"
+              required
+            />
+          </div>
+
+          <!-- Password Field -->
+          <div>
+            <label for="password" class="block text-sm text-gray-300 mb-2">
+              Password
+            </label>
+            <div class="relative">
+              <input
+                id="password"
+                type="password"
+                name="password"
+                class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-none focus:border-white transition-colors pr-12"
+                placeholder="Enter your password"
+                required
+              />
+              <button
+                type="button"
+                onclick="togglePasswordVisibility()"
+                class="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                <svg
+                  id="eye-open"
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                <svg
+                  id="eye-off"
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  style="display: none"
+                >
+                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                  <path
+                    d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"
+                  />
+                  <path
+                    d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"
+                  />
+                  <line x1="2" x2="22" y1="12" y2="12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Submit Button -->
+          <button
+            type="submit"
+            class="w-full py-3 bg-white text-black font-medium rounded-sm hover:bg-gray-100 disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+          >
+            Sign In
+          </button>
+        </form>
+
+        <!-- Footer -->
+        <div class="mt-8 text-center">
+          <p class="text-xs text-gray-600">
+            Demo credentials: requiemcreatif@gmail.com
+          </p>
+        </div>
+      </div>
+    </div>
+    <script>
+      function togglePasswordVisibility() {
+        const passwordInput = document.getElementById("password");
+        const eyeOpen = document.getElementById("eye-open");
+        const eyeOff = document.getElementById("eye-off");
+        if (passwordInput.type === "password") {
+          passwordInput.type = "text";
+          eyeOpen.style.display = "none";
+          eyeOff.style.display = "block";
+        } else {
+          passwordInput.type = "password";
+          eyeOpen.style.display = "block";
+          eyeOff.style.display = "none";
+        }
+      }
+    </script>
+  </body>
+</html>

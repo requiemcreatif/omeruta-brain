@@ -19,14 +19,20 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from authentication import views as auth_views
+from django.views.generic import RedirectView
 
 urlpatterns = [
+    path("", auth_views.UserLoginView.as_view(), name="home"),
     path("admin/", admin.site.urls),
     path("api/", include("core.urls")),
     path("api/auth/", include("authentication.urls")),
     path("api/crawler/", include("crawler.urls")),
     path("api/agents/", include("agents.urls")),
     path("accounts/", include("allauth.urls")),
+    path("__reload__/", include("django_browser_reload.urls")),
+    # Redirect /login to the home page
+    path("login/", RedirectView.as_view(pattern_name="home", permanent=True)),
 ]
 
 # Serve static and media files during development

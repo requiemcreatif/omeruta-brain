@@ -64,6 +64,9 @@ INSTALLED_APPS = [
     "authentication",
     "crawler",
     "agents",
+    "tailwind",
+    "theme",
+    "django_browser_reload",
 ]
 
 MIDDLEWARE = [
@@ -76,6 +79,7 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "django_browser_reload.middleware.BrowserReloadMiddleware",
 ]
 
 ROOT_URLCONF = "omeruta_brain_project.urls"
@@ -320,3 +324,5 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
+TAILWIND_APP_NAME = "theme"
