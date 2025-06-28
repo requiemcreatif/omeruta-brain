@@ -422,8 +422,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!websocketEnabled) return;
         
         try {
-            const csrfToken = '{{ csrf_token }}';
-            client = new OmerutaBrainClient(window.location.origin + '/api', csrfToken);
+            const accessToken = window.getAccessToken ? window.getAccessToken() : null;
+            client = new OmerutaBrainClient(window.location.origin + '/api', accessToken);
             
             // Override client methods to integrate with our UI
             client.showConnectionStatus = (status, type) => {
@@ -512,7 +512,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showProgress('Processing with enhanced RAG...', 10);
                 const response = await fetch('/ai/api/agents/tinyllama/enhanced_chat/', {
                     method: 'POST',
-                    headers: {
+                    headers: window.getAuthHeaders ? window.getAuthHeaders() : {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': '{{ csrf_token }}'
                     },
@@ -574,7 +574,7 @@ document.addEventListener('DOMContentLoaded', function() {
             try {
                 await fetch('/ai/api/agents/tinyllama/clear_conversation/', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                    headers: window.getAuthHeaders ? window.getAuthHeaders() : { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
                     body: JSON.stringify({ conversation_id: conversationId })
                 });
             } catch (err) {
@@ -613,7 +613,7 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const response = await fetch('/ai/api/agents/tinyllama/enhanced_stats/', {
                 method: 'GET',
-                headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+                headers: window.getAuthHeaders ? window.getAuthHeaders() : { 'X-CSRFToken': '{{ csrf_token }}' }
             });
             
             if (response.ok) {

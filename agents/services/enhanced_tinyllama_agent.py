@@ -1,7 +1,6 @@
 import time
 import logging
-from typing import Dict, Any, Optional, List
-from django.conf import settings
+from typing import Dict, Any, List
 from .local_model_service import TinyLlamaService
 from knowledge_base.services.enhanced_rag import EnhancedRAGService
 from knowledge_base.services.pgvector_search import PgVectorSearchService
@@ -67,7 +66,7 @@ class EnhancedTinyLlamaAgent:
                         response_config=response_config,
                     )
                 except Exception as e:
-                    logger.warning(f"Context retrieval failed: {e}")
+                    logger.warning("Context retrieval failed: %s", e)
                     context_info = None
 
             # Step 3: Prepare prompt
@@ -118,7 +117,7 @@ class EnhancedTinyLlamaAgent:
             return result
 
         except Exception as e:
-            logger.error(f"Error processing message: {e}")
+            logger.error("Error processing message: %s", e)
             return self._create_error_response(str(e), "processing_error")
 
     def _create_error_response(
@@ -167,7 +166,7 @@ class EnhancedTinyLlamaAgent:
                 ),
             }
         except Exception as e:
-            logger.error(f"Error getting knowledge stats: {e}")
+            logger.error("Error getting knowledge stats: %s", e)
             return {"error": str(e)}
 
     def search_knowledge_base(self, query: str, filters: Dict = None) -> Dict[str, Any]:
@@ -175,7 +174,7 @@ class EnhancedTinyLlamaAgent:
         try:
             return self.search_service.enhanced_search(query, filters)
         except Exception as e:
-            logger.error(f"Knowledge base search error: {e}")
+            logger.error("Knowledge base search error: %s", e)
             return {"error": str(e), "results": []}
 
     def get_conversation_context(
@@ -198,7 +197,7 @@ class EnhancedTinyLlamaAgent:
 
             return context_info
         except Exception as e:
-            logger.error(f"Context retrieval error: {e}")
+            logger.error("Context retrieval error: %s", e)
             return {"error": str(e), "context": "", "sources": []}
 
     def process_batch_messages(

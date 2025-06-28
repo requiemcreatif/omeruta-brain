@@ -1,8 +1,12 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
-from django.utils.safestring import mark_safe
 from .models import KnowledgeEmbedding, QueryCache
+from .services.smart_chunker import SmartSemanticChunker
+import csv
+from django.http import HttpResponse
+from django.utils import timezone
+from datetime import timedelta
 
 
 @admin.register(KnowledgeEmbedding)
@@ -118,7 +122,6 @@ class KnowledgeEmbeddingAdmin(admin.ModelAdmin):
 
     def regenerate_quality_scores(self, request, queryset):
         """Regenerate quality scores for selected embeddings"""
-        from .services.smart_chunker import SmartSemanticChunker
 
         chunker = SmartSemanticChunker()
 
@@ -140,8 +143,6 @@ class KnowledgeEmbeddingAdmin(admin.ModelAdmin):
 
     def export_selected_chunks(self, request, queryset):
         """Export selected chunks as text"""
-        import csv
-        from django.http import HttpResponse
 
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = 'attachment; filename="knowledge_chunks.csv"'
@@ -252,8 +253,6 @@ class QueryCacheAdmin(admin.ModelAdmin):
 
     def clear_old_cache(self, request, queryset):
         """Clear old cache entries"""
-        from django.utils import timezone
-        from datetime import timedelta
 
         old_date = timezone.now() - timedelta(days=30)
         old_entries = queryset.filter(last_accessed__lt=old_date)
@@ -268,8 +267,6 @@ class QueryCacheAdmin(admin.ModelAdmin):
 
     def export_query_stats(self, request, queryset):
         """Export query statistics"""
-        import csv
-        from django.http import HttpResponse
 
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = 'attachment; filename="query_stats.csv"'

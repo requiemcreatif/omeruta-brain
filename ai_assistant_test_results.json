@@ -1,0 +1,176 @@
+[
+  {
+    "timestamp": "2025-06-28T20:57:24.389992",
+    "test": "CSRF Token Retrieval",
+    "status": "PASS",
+    "details": "Token: soauvUxpGr..."
+  },
+  {
+    "timestamp": "2025-06-28T20:57:24.542947",
+    "test": "Login",
+    "status": "PASS",
+    "details": "Redirected to: http://127.0.0.1:8000/core/dashboard/"
+  },
+  {
+    "timestamp": "2025-06-28T20:57:43.577168",
+    "test": "AI Assistant Page Load",
+    "status": "PASS",
+    "details": "All required elements found"
+  },
+  {
+    "timestamp": "2025-06-28T20:57:43.593180",
+    "test": "Session Authentication",
+    "status": "PASS",
+    "details": "User: requiemcreatif@gmail.com"
+  },
+  {
+    "timestamp": "2025-06-28T20:58:11.365352",
+    "test": "API Authentication",
+    "status": "PASS",
+    "details": "JWT token working for API"
+  },
+  {
+    "timestamp": "2025-06-28T20:59:53.377846",
+    "test": "HTTP API - general",
+    "status": "PASS",
+    "details": "Response time: 83.43s, Length: 729"
+  },
+  {
+    "timestamp": "2025-06-28T21:01:47.108321",
+    "test": "HTTP API - general",
+    "status": "PASS",
+    "details": "Response time: 94.64s, Length: 1847"
+  },
+  {
+    "timestamp": "2025-06-28T21:03:38.342264",
+    "test": "HTTP API - general",
+    "status": "PASS",
+    "details": "Response time: 89.40s, Length: 1564"
+  },
+  {
+    "timestamp": "2025-06-28T21:05:39.272344",
+    "test": "HTTP API - research",
+    "status": "PASS",
+    "details": "Response time: 99.27s, Length: 2160"
+  },
+  {
+    "timestamp": "2025-06-28T21:07:26.931603",
+    "test": "HTTP API - research",
+    "status": "PASS",
+    "details": "Response time: 83.75s, Length: 1598"
+  },
+  {
+    "timestamp": "2025-06-28T21:09:17.479934",
+    "test": "HTTP API - research",
+    "status": "PASS",
+    "details": "Response time: 89.62s, Length: 1697"
+  },
+  {
+    "timestamp": "2025-06-28T21:10:44.239323",
+    "test": "HTTP API - qa",
+    "status": "PASS",
+    "details": "Response time: 66.16s, Length: 1202"
+  },
+  {
+    "timestamp": "2025-06-28T21:12:39.146800",
+    "test": "HTTP API - qa",
+    "status": "PASS",
+    "details": "Response time: 97.14s, Length: 1637"
+  },
+  {
+    "timestamp": "2025-06-28T21:14:38.311878",
+    "test": "HTTP API - qa",
+    "status": "PASS",
+    "details": "Response time: 99.93s, Length: 1936"
+  },
+  {
+    "timestamp": "2025-06-28T21:16:03.050067",
+    "test": "HTTP API - content_analyzer",
+    "status": "PASS",
+    "details": "Response time: 63.33s, Length: 831"
+  },
+  {
+    "timestamp": "2025-06-28T21:17:42.908727",
+    "test": "HTTP API - content_analyzer",
+    "status": "PASS",
+    "details": "Response time: 76.82s, Length: 1111"
+  },
+  {
+    "timestamp": "2025-06-28T21:19:01.474771",
+    "test": "HTTP API - content_analyzer",
+    "status": "PASS",
+    "details": "Response time: 56.80s, Length: 770"
+  },
+  {
+    "timestamp": "2025-06-28T21:20:59.900214",
+    "test": "HTTP API - general",
+    "status": "PASS",
+    "details": "Response time: 100.54s, Length: 1844"
+  },
+  {
+    "timestamp": "2025-06-28T21:20:59.900252",
+    "test": "Settings Test - general",
+    "status": "PASS",
+    "details": "Agent type matches, Response length: 1844"
+  },
+  {
+    "timestamp": "2025-06-28T21:22:40.344427",
+    "test": "HTTP API - research",
+    "status": "PASS",
+    "details": "Response time: 81.89s, Length: 1401"
+  },
+  {
+    "timestamp": "2025-06-28T21:22:40.344521",
+    "test": "Settings Test - research",
+    "status": "PASS",
+    "details": "Agent type matches, Response length: 1401"
+  },
+  {
+    "timestamp": "2025-06-28T21:24:09.031521",
+    "test": "HTTP API - qa",
+    "status": "PASS",
+    "details": "Response time: 67.33s, Length: 956"
+  },
+  {
+    "timestamp": "2025-06-28T21:24:09.031612",
+    "test": "Settings Test - qa",
+    "status": "PASS",
+    "details": "Agent type matches, Response length: 956"
+  },
+  {
+    "timestamp": "2025-06-28T21:26:05.396127",
+    "test": "HTTP API - content_analyzer",
+    "status": "PASS",
+    "details": "Response time: 93.99s, Length: 1642"
+  },
+  {
+    "timestamp": "2025-06-28T21:26:05.396273",
+    "test": "Settings Test - content_analyzer",
+    "status": "PASS",
+    "details": "Agent type matches, Response length: 1642"
+  },
+  {
+    "timestamp": "2025-06-28T21:27:56.858439",
+    "test": "HTTP API - research",
+    "status": "PASS",
+    "details": "Response time: 90.27s, Length: 1701"
+  },
+  {
+    "timestamp": "2025-06-28T21:27:56.858558",
+    "test": "Knowledge Base Integration",
+    "status": "PASS",
+    "details": "Sources: 5, Used context: True"
+  },
+  {
+    "timestamp": "2025-06-28T21:27:57.471781",
+    "test": "WebSocket Connection",
+    "status": "FAIL",
+    "details": "server rejected WebSocket connection: HTTP 403"
+  },
+  {
+    "timestamp": "2025-06-28T21:27:57.520775",
+    "test": "Logout Functionality",
+    "status": "FAIL",
+    "details": "Logout failed: 403"
+  }
+]

@@ -33,6 +33,8 @@ urlpatterns = [
     path("__reload__/", include("django_browser_reload.urls")),
     # Redirect /login to the home page
     path("login/", RedirectView.as_view(pattern_name="home", permanent=True)),
+    # Dedicated logout endpoint to bypass DRF interference
+    path("simple-logout/", auth_views.user_logout, name="simple_logout"),
 ]
 
 # Serve static and media files during development

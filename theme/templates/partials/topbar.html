@@ -1,6 +1,314 @@
-<!-- Topbar -->
-<header
-  class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
->
-  <!-- Topbar content will go here -->
+<!-- Top Bar - matches the React top-bar.tsx design exactly -->
+<header class="sticky top-0 z-40 w-full border-b border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-black/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-black/60">
+  <div class="flex h-16 items-center justify-between px-6">
+    <!-- Left side -->
+    <div class="flex items-center gap-4">
+      <!-- Sidebar Trigger -->
+      <button id="sidebar-trigger" class="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/>
+        </svg>
+      </button>
+
+      <!-- Search -->
+      <div class="relative">
+        <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input
+          type="text"
+          placeholder="Search..."
+          class="w-64 pl-10 pr-4 py-2 bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg text-black dark:text-white placeholder-gray-500 focus:outline-none focus:border-gray-400 dark:focus:border-gray-600 text-sm"
+        />
+      </div>
+    </div>
+
+    <!-- Right side -->
+    <div class="flex items-center gap-4">
+      <!-- Status indicator -->
+      <div class="flex items-center gap-2">
+        <div id="health-indicator" class="w-2 h-2 rounded-full bg-green-500"></div>
+        <span id="health-text" class="text-xs text-gray-500 dark:text-gray-500">Online</span>
+      </div>
+
+      <!-- Theme toggle -->
+      <button
+        id="theme-toggle"
+        class="p-2 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors"
+      >
+        <!-- Sun icon (for dark mode) -->
+        <svg id="sun-icon" class="w-5 h-5 hidden dark:block" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.93 4.93l1.41 1.41"/><path d="M17.66 17.66l1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M6.34 17.66l-1.41 1.41"/><path d="M19.07 4.93l-1.41 1.41"/>
+        </svg>
+        <!-- Moon icon (for light mode) -->
+        <svg id="moon-icon" class="w-5 h-5 block dark:hidden" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+        </svg>
+      </button>
+
+      <!-- Notifications -->
+      <button class="relative p-2 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors">
+        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="m13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+        <span class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-xs flex items-center justify-center text-white">
+          3
+        </span>
+      </button>
+
+      {% if user.is_authenticated %}
+      <!-- User menu -->
+      <div class="relative">
+        <button 
+          id="user-menu-button"
+          class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
+          onclick="toggleUserMenu()"
+        >
+          <div class="w-8 h-8 bg-gray-300 dark:bg-gray-700 rounded-full flex items-center justify-center">
+            <span class="text-black dark:text-white text-sm font-medium">
+              {{ user.first_name|first|default:user.email|first|upper }}
+            </span>
+          </div>
+          <div class="text-left hidden sm:block">
+            <p class="text-black dark:text-white text-sm font-medium">
+              {{ user.first_name|default:"Admin" }}
+            </p>
+            <p class="text-gray-600 dark:text-gray-400 text-xs">
+              {{ user.email }}
+            </p>
+          </div>
+        </button>
+        
+        <!-- Dropdown Menu -->
+        <div 
+          id="user-dropdown" 
+          class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50"
+        >
+          <div class="py-1">
+            <a href="#" class="flex items-center px-4 py-2 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+              </svg>
+              Profile
+            </a>
+            <a href="#" class="flex items-center px-4 py-2 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+              Settings
+            </a>
+            <div class="border-t border-gray-200 dark:border-gray-700 my-1"></div>
+            <button 
+              onclick="handleLogout()"
+              class="flex items-center w-full px-4 py-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              <svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" x2="9" y1="12" y2="12"/>
+              </svg>
+              Sign out
+            </button>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <!-- Login Button -->
+      <a href="{% url 'home' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium">
+        Sign In
+      </a>
+      {% endif %}
+    </div>
+  </div>
 </header>
+
+{% if user.is_authenticated %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let authTokens = null;
+    
+    // Health check functionality
+    async function checkHealth() {
+        try {
+            const response = await fetch('/core/health/');
+            const healthIndicator = document.getElementById('health-indicator');
+            const healthText = document.getElementById('health-text');
+            
+            if (response.ok) {
+                healthIndicator.className = 'w-2 h-2 rounded-full bg-green-500';
+                healthText.textContent = 'Online';
+            } else {
+                healthIndicator.className = 'w-2 h-2 rounded-full bg-red-500';
+                healthText.textContent = 'Offline';
+            }
+        } catch (error) {
+            const healthIndicator = document.getElementById('health-indicator');
+            const healthText = document.getElementById('health-text');
+            healthIndicator.className = 'w-2 h-2 rounded-full bg-red-500';
+            healthText.textContent = 'Offline';
+        }
+    }
+
+    // Theme toggle functionality
+    function initTheme() {
+        const themeToggle = document.getElementById('theme-toggle');
+        const sunIcon = document.getElementById('sun-icon');
+        const moonIcon = document.getElementById('moon-icon');
+        
+        // Get current theme
+        const currentTheme = localStorage.getItem('theme') || 'light';
+        
+        // Apply theme
+        if (currentTheme === 'dark') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+        
+        themeToggle.addEventListener('click', function() {
+            const isDark = document.documentElement.classList.contains('dark');
+            
+            if (isDark) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        });
+    }
+
+    // User dropdown functionality
+    window.toggleUserMenu = function() {
+        const dropdown = document.getElementById('user-dropdown');
+        dropdown.classList.toggle('hidden');
+    };
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(event) {
+        const userMenuButton = document.getElementById('user-menu-button');
+        const dropdown = document.getElementById('user-dropdown');
+        
+        if (!userMenuButton.contains(event.target) && !dropdown.contains(event.target)) {
+            dropdown.classList.add('hidden');
+        }
+    });
+
+    // Authentication functionality
+    async function checkAuthStatus() {
+        try {
+            const authResponse = await fetch('/auth/check-auth/', {
+                method: 'GET',
+                credentials: 'include',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                }
+            });
+
+            if (authResponse.ok) {
+                const tokenResponse = await fetch('/auth/get-tokens/', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}',
+                    }
+                });
+
+                if (tokenResponse.ok) {
+                    const tokenData = await tokenResponse.json();
+                    authTokens = tokenData.tokens;
+                    
+                    sessionStorage.setItem('access_token', authTokens.access);
+                    sessionStorage.setItem('refresh_token', authTokens.refresh);
+                }
+            }
+        } catch (error) {
+            console.error('Auth check failed:', error);
+        }
+    }
+
+    // Logout functionality
+    window.handleLogout = async function() {
+        try {
+            sessionStorage.removeItem('access_token');
+            sessionStorage.removeItem('refresh_token');
+            
+            await fetch('/auth/logout/', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}',
+                },
+                body: JSON.stringify({
+                    refresh_token: authTokens?.refresh || null
+                })
+            });
+
+            window.location.href = '{% url "home" %}';
+        } catch (error) {
+            console.error('Logout error:', error);
+            window.location.href = '{% url "home" %}';
+        }
+    };
+
+    // Token refresh functionality
+    function scheduleTokenRefresh() {
+        setInterval(async () => {
+            try {
+                const refreshToken = sessionStorage.getItem('refresh_token');
+                if (refreshToken) {
+                    const response = await fetch('/auth/token/refresh/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            refresh: refreshToken
+                        })
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        sessionStorage.setItem('access_token', data.access);
+                        if (data.refresh) {
+                            sessionStorage.setItem('refresh_token', data.refresh);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Token refresh error:', error);
+            }
+        }, 50 * 60 * 1000); // 50 minutes
+    }
+
+    // Export functions for API calls
+    window.getAccessToken = function() {
+        return sessionStorage.getItem('access_token');
+    };
+
+    window.getAuthHeaders = function() {
+        const token = sessionStorage.getItem('access_token');
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}',
+        };
+        
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        return headers;
+    };
+
+    // Initialize everything
+    initTheme();
+    checkHealth();
+    checkAuthStatus().then(() => {
+        scheduleTokenRefresh();
+    });
+    
+    // Check health periodically
+    setInterval(checkHealth, 30000); // Every 30 seconds
+});
+</script>
+{% endif %}
