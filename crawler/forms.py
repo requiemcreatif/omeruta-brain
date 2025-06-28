@@ -1,7 +1,8 @@
 from django import forms
+from .models import CrawlJob
 
 
-class CrawlJobForm(forms.Form):
+class CrawlJobForm(forms.ModelForm):
     urls = forms.CharField(
         widget=forms.Textarea(
             attrs={
@@ -11,49 +12,48 @@ class CrawlJobForm(forms.Form):
             }
         ),
         label="URLs (one per line)",
+        help_text="Enter one URL per line.",
     )
-    strategy = forms.ChoiceField(
-        choices=[
-            ("single_page", "Single URL"),
-            ("sitemap", "Sitemap Crawl"),
-            ("recursive", "Recursive Crawl"),
-        ],
-        widget=forms.Select(
-            attrs={
-                "class": "mt-1 w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-sm text-white focus:outline-none focus:border-white transition-colors"
-            }
-        ),
-        initial="single_page",
-        label="Crawl Strategy",
-    )
-    max_pages = forms.IntegerField(
-        initial=10,
-        min_value=1,
-        label="Max Pages",
-        widget=forms.NumberInput(
-            attrs={
-                "class": "mt-1 w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-sm text-white focus:outline-none focus:border-white transition-colors"
-            }
-        ),
-    )
-    max_depth = forms.IntegerField(
-        initial=3,
-        min_value=1,
-        label="Max Depth",
-        widget=forms.NumberInput(
-            attrs={
-                "class": "mt-1 w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-sm text-white focus:outline-none focus:border-white transition-colors"
-            }
-        ),
-    )
-    delay_between_requests = forms.FloatField(
-        initial=0.5,
-        min_value=0,
-        label="Delay (seconds)",
-        widget=forms.NumberInput(
-            attrs={
-                "step": "0.1",
-                "class": "mt-1 w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-sm text-white focus:outline-none focus:border-white transition-colors",
-            }
-        ),
-    )
+
+    class Meta:
+        model = CrawlJob
+        fields = [
+            "strategy",
+            "max_pages",
+            "max_depth",
+            "delay_between_requests",
+        ]
+        widgets = {
+            "strategy": forms.Select(
+                attrs={
+                    "class": "mt-1 w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-sm text-white focus:outline-none focus:border-white transition-colors"
+                }
+            ),
+            "max_pages": forms.NumberInput(
+                attrs={
+                    "class": "mt-1 w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-sm text-white focus:outline-none focus:border-white transition-colors"
+                }
+            ),
+            "max_depth": forms.NumberInput(
+                attrs={
+                    "class": "mt-1 w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-sm text-white focus:outline-none focus:border-white transition-colors"
+                }
+            ),
+            "delay_between_requests": forms.NumberInput(
+                attrs={
+                    "step": "0.1",
+                    "class": "mt-1 w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-sm text-white focus:outline-none focus:border-white transition-colors",
+                }
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["strategy"].label = "Crawl Strategy"
+        self.fields["max_pages"].label = "Max Pages"
+        self.fields["max_depth"].label = "Max Depth"
+        self.fields["delay_between_requests"].label = "Delay (seconds)"
+        self.fields["strategy"].initial = "single"
+        self.fields["max_pages"].initial = 10
+        self.fields["max_depth"].initial = 3
+        self.fields["delay_between_requests"].initial = 0.5

@@ -10,5 +10,5 @@ router.register(r"async", AsyncAgentViewSet, basename="async")
 
 urlpatterns = [
     path("", AIAssistantView.as_view(), name="ai_assistant"),
-    path("api/", include(router.urls)),
+    path("api/agents/", include(router.urls)),
 ]

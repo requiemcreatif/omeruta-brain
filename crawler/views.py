@@ -45,61 +45,54 @@ class CrawlerTemplateView(View):
 
     def get(self, request, *args, **kwargs):
         form = self.form_class()
-        crawl_jobs = CrawlJob.objects.filter(created_by=request.user).order_by(
-            "-created_at"
+
+        all_user_pages = (
+            CrawledPage.objects.filter(crawl_job__created_by=request.user)
+            .select_related("crawl_job")
+            .order_by("-crawled_at")
         )
 
-        selected_job_id = request.GET.get("job_id")
         selected_page_id = request.GET.get("page_id")
-
-        crawled_pages = []
         selected_page = None
-        job = None
-
-        if selected_job_id:
-            try:
-                job = CrawlJob.objects.get(id=selected_job_id, created_by=request.user)
-                crawled_pages = CrawledPage.objects.filter(crawl_job=job).order_by(
-                    "-crawled_at"
-                )
-                if not selected_page_id and crawled_pages.exists():
-                    selected_page_id = crawled_pages.first().id
-            except CrawlJob.DoesNotExist:
-                selected_job_id = None
 
         if selected_page_id:
             try:
-                selected_page = CrawledPage.objects.get(id=selected_page_id)
-                if selected_page.crawl_job.created_by != request.user:
-                    selected_page = None
+                selected_page = all_user_pages.get(id=selected_page_id)
             except CrawledPage.DoesNotExist:
                 selected_page = None
+        elif not request.GET.get("job_id") and all_user_pages.exists():
+            selected_page = all_user_pages.first()
+
+        polling_job_id = request.GET.get("job_id")
+        polling_job = None
+        if polling_job_id:
+            try:
+                polling_job = CrawlJob.objects.get(
+                    id=polling_job_id, created_by=request.user
+                )
+            except CrawlJob.DoesNotExist:
+                polling_job = None
 
         context = {
             "form": form,
-            "crawl_jobs": crawl_jobs,
-            "selected_job_id": selected_job_id,
-            "selected_job": job,
-            "crawled_pages": crawled_pages,
+            "all_user_pages": all_user_pages,
             "selected_page": selected_page,
+            "polling_job": polling_job,
         }
         return render(request, self.template_name, context)
 
     def post(self, request, *args, **kwargs):
         form = self.form_class(request.POST)
         if form.is_valid():
-            data = form.cleaned_data
-            url_list = data["urls"].splitlines()
-            url_list = [url.strip() for url in url_list if url.strip()]
+            crawl_job = form.save(commit=False)
+            crawl_job.created_by = request.user
 
-            crawl_job = CrawlJob.objects.create(
-                start_urls=url_list,
-                strategy=data["strategy"],
-                max_pages=data["max_pages"],
-                max_depth=data["max_depth"],
-                delay_between_requests=data["delay_between_requests"],
-                created_by=request.user,
-            )
+            # The form field is 'urls' (textarea), model field is 'start_urls' (JSON)
+            # We need to manually handle this conversion.
+            url_list = form.cleaned_data["urls"].splitlines()
+            crawl_job.start_urls = [url.strip() for url in url_list if url.strip()]
+
+            crawl_job.save()
 
             def run_crawl_job():
                 loop = asyncio.new_event_loop()
@@ -114,12 +107,14 @@ class CrawlerTemplateView(View):
 
             return redirect(f"{reverse('crawler:crawler_page')}?job_id={crawl_job.id}")
 
-        crawl_jobs = CrawlJob.objects.filter(created_by=request.user).order_by(
-            "-created_at"
+        all_user_pages = (
+            CrawledPage.objects.filter(crawl_job__created_by=request.user)
+            .select_related("crawl_job")
+            .order_by("-crawled_at")
         )
         context = {
             "form": form,
-            "crawl_jobs": crawl_jobs,
+            "all_user_pages": all_user_pages,
         }
         return render(request, self.template_name, context)
 

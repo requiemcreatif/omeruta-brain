@@ -4,6 +4,7 @@ from django.conf import settings
 from typing import Optional, Dict, Any
 import logging
 import gc
+from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,7 @@ class TinyLlamaService:
         self.model = None
         self.tokenizer = None
         self.pipeline = None
+        self.llm = None
         # Properly detect device with MPS support
         if torch.cuda.is_available():
             self.device = "cuda"
@@ -85,6 +87,7 @@ class TinyLlamaService:
                     torch_dtype=torch.float32,
                 )
 
+            self.llm = HuggingFacePipeline(pipeline=self.pipeline)
             self.model_loaded = True
             logger.info("✅ TinyLlama loaded successfully!")
             return True

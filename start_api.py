@@ -17,12 +17,10 @@ if __name__ == "__main__":
     print("📡 Server will be available at: http://localhost:8000")
     print("🔒 Admin panel available at: http://localhost:8000/admin/")
     print("📚 API endpoints:")
-    print("   - Health check: http://localhost:8000/api/health/")
-    print("   - API info: http://localhost:8000/api/info/")
-    print("   - User registration: http://localhost:8000/api/auth/register/")
-    print("   - User login: http://localhost:8000/api/auth/login/")
-    print("   - Admin login: http://localhost:8000/api/auth/admin/login/")
-    print("   - Admin dashboard: http://localhost:8000/api/auth/admin/dashboard/")
+    print("   - API info:     http://localhost:8000/core/info/")
+    print("   - Health check: http://localhost:8000/core/health/")
+    print("   - Admin:        http://localhost:8000/admin/")
+    print("   - Swagger UI:   http://localhost:8000/api/docs/")
     print("\n🚀 Starting server...")
 
     # Start the development server

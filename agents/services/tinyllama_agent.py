@@ -3,6 +3,7 @@ from .enhanced_search_service import EnhancedVectorSearchService
 from crawler.models import CrawledPage
 from typing import Dict, Any, Optional
 import logging
+from .conversation_memory import ConversationMemory
 
 logger = logging.getLogger(__name__)
 
@@ -11,11 +12,9 @@ class TinyLlamaAgent:
     """Agent powered by TinyLlama with access to your crawled knowledge base"""
 
     def __init__(self, agent_type: str = "general"):
-        self.agent_type = agent_type
         self.llm_service = TinyLlamaService()
         self.search_service = EnhancedVectorSearchService()
-
-        # Enhanced system prompts based on your domain
+        self.agent_type = agent_type
         self.system_prompts = {
             "general": """You are Omeruta Brain, an intelligent AI assistant with access to a curated knowledge base.
             Answer questions accurately and cite your sources when using provided context.
@@ -180,6 +179,11 @@ Please answer the user's question based on the context above. If the context doe
                 "context_sources": 0,
                 "error": str(e),
             }
+
+    def set_agent_type(self, agent_type: str):
+        if agent_type not in self.system_prompts:
+            raise ValueError(f"Invalid agent type: {agent_type}")
+        self.agent_type = agent_type
 
     def get_available_knowledge_stats(self) -> Dict[str, Any]:
         """Get stats about available knowledge base"""

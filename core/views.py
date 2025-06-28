@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework import status
 from django.views.generic import TemplateView
+from django.contrib.auth.mixins import LoginRequiredMixin
 
 # Create your views here.
 
@@ -21,25 +22,25 @@ def health_check(request):
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
 def api_info(request):
     """
-    API information endpoint
+    Provides basic information about the API.
     """
     return Response(
         {
             "name": "Omeruta Brain API",
             "version": "1.0.0",
-            "description": "AI-powered brain and knowledge management system",
+            "documentation": "/api/docs/",
             "endpoints": {
-                "health": "/api/health/",
-                "info": "/api/info/",
-                "admin": "/admin/",
+                "health": "/core/health/",
+                "info": "/core/info/",
+                "auth": "/auth/",
+                "crawler": "/crawler/",
+                "agents": "/ai/api/agents/",
             },
-        },
-        status=status.HTTP_200_OK,
+        }
     )
 
 
-class DashboardView(TemplateView):
+class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = "core/index.html"

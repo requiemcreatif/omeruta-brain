@@ -57,10 +57,10 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const selectedJobId = '{{ selected_job_id }}';
-    const selectedJobStatus = '{{ selected_job.status }}';
+    const pollingJobId = '{{ polling_job.id }}';
+    const pollingJobStatus = '{{ polling_job.status }}';
 
-    if (selectedJobId && (selectedJobStatus === 'running' || selectedJobStatus === 'pending')) {
+    if (pollingJobId && (pollingJobStatus === 'running' || pollingJobStatus === 'pending')) {
         const startButton = document.getElementById('start-crawl-btn');
         if(startButton) {
             startButton.disabled = true;
@@ -68,24 +68,44 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const pollJobStatus = () => {
-            fetch(`/api/crawler/jobs/${selectedJobId}/`)
-                .then(response => response.json())
+            console.log(`Polling for job ID: ${pollingJobId}`);
+            fetch(`/crawler/jobs/${pollingJobId}/`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Network response was not ok, status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
-                        // Reload the page to show the final status and results
-                        window.location.reload();
+                    console.log('Received data:', data);
+                    if (data && data.status) {
+                        console.log(`Current job status: ${data.status}`);
+                        if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
+                            console.log('Job finished. Reloading page.');
+                            window.location.href = `?job_id=${pollingJobId}`;
+                        } else {
+                            console.log('Job still running. Polling again in 5s.');
+                            setTimeout(pollJobStatus, 5000);
+                        }
                     } else {
-                        // Continue polling
-                        setTimeout(pollJobStatus, 5000);
+                        console.error('Polling response did not contain a status.', data);
                     }
                 })
                 .catch(error => {
                     console.error('Error polling job status:', error);
                     // Stop polling on error
+                    const startButton = document.getElementById('start-crawl-btn');
+                    if(startButton) {
+                        startButton.disabled = false;
+                        startButton.textContent = 'Crawl Failed (Check Console)';
+                        startButton.classList.add('bg-red-600', 'hover:bg-red-700');
+                        startButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                    }
                 });
         };
 
         // Start polling
+        console.log('Initial poll starts in 5s.');
         setTimeout(pollJobStatus, 5000);
     }
 });

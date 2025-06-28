@@ -14,13 +14,44 @@ from celery.result import AsyncResult
 from django.core.cache import cache
 import time
 import logging
-from django.views.generic import TemplateView
+from django.views import View
+from django.shortcuts import render
 
 logger = logging.getLogger(__name__)
 
 
-class AIAssistantView(TemplateView):
+class AIAssistantView(View):
     template_name = "agents/ai_assistant.html"
+
+    def get(self, request, *args, **kwargs):
+        agent = TinyLlamaAgent()
+        status = agent.get_available_knowledge_stats()
+        model_info = agent.llm_service.get_model_info()
+
+        available_agent_types = list(agent.system_prompts.keys())
+
+        def format_agent_type(type_name):
+            if type_name == "qa":
+                return "Q&A"
+            return type_name.replace("_", " ").title()
+
+        formatted_agent_types = [
+            {"value": type_name, "name": format_agent_type(type_name)}
+            for type_name in available_agent_types
+        ]
+
+        initial_status = {
+            "knowledge_stats": status,
+            "model_info": model_info,
+            "agent_type": agent.agent_type,
+            "available_agent_types": formatted_agent_types,
+        }
+
+        context = {
+            "initial_status": initial_status,
+            "conversation_id": request.session.get("conversation_id"),
+        }
+        return render(request, self.template_name, context)
 
 
 class TinyLlamaViewSet(viewsets.GenericViewSet):
@@ -141,7 +172,7 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
 
         return Response({"conversation_id": conversation_id, "summary": summary})
 
-    @action(detail=False, methods=["get"])
+    @action(detail=False, methods=["get"], url_path="status")
     def status(self, request):
         """Get agent and knowledge base status"""
         stats = self.agent.get_available_knowledge_stats()
@@ -156,29 +187,30 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
             }
         )
 
-    @action(detail=False, methods=["post"])
+    @action(detail=False, methods=["post"], url_path="change_agent_type")
     def change_agent_type(self, request):
-        """Change the agent type (general, research, qa, content_analyzer)"""
-        agent_type = request.data.get("agent_type", "general")
-
-        if agent_type not in self.agent.system_prompts:
+        agent_type = request.data.get("agent_type")
+        if not agent_type:
             return Response(
-                {
-                    "error": f"Invalid agent type. Available types: {list(self.agent.system_prompts.keys())}"
-                },
-                status=status.HTTP_400_BAD_REQUEST,
+                {"error": "agent_type is required"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Create new agent with specified type
-        self.agent = TinyLlamaAgent(agent_type=agent_type)
-
-        return Response(
-            {
-                "message": f"Agent type changed to {agent_type}",
-                "agent_type": agent_type,
-                "system_prompt": self.agent.system_prompts[agent_type],
-            }
-        )
+        try:
+            self.agent.set_agent_type(agent_type)
+            # Update the session
+            request.session["agent_type"] = agent_type
+            return Response(
+                {"message": f"Agent type changed to {agent_type}"},
+                status=status.HTTP_200_OK,
+            )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"Error changing agent type: {e}")
+            return Response(
+                {"error": "An unexpected error occurred"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     # Async Endpoints with Celery Integration
 

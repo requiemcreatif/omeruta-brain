@@ -11,12 +11,12 @@
         {% else %}
             <div class="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
                 <p>
-                    {% if selected_job.status == 'running' or selected_job.status == 'pending' %}
+                    {% if polling_job.status == 'running' or polling_job.status == 'pending' %}
                         Waiting for crawl to complete...
-                    {% elif crawled_pages %}
-                        Select a URL to view its content.
+                    {% elif all_user_pages %}
+                        Select a URL from the history to view its content.
                     {% else %}
-                        Select a job from the history to view its pages.
+                        No crawled pages found. Start a new crawl.
                     {% endif %}
                 </p>
             </div>
