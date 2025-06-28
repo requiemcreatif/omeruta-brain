@@ -14,7 +14,7 @@ logger = get_task_logger(__name__)
 User = get_user_model()
 
 
-@shared_task(bind=True, max_retries=3)
+@shared_task(bind=True, max_retries=3, time_limit=120, soft_time_limit=100)
 def process_user_message_async(
     self,
     message,
@@ -95,12 +95,46 @@ def process_user_message_async(
             timeout=300,
         )
 
-        # Process message
+        # Process message with enhanced error handling
         start_time = time.time()
-        result = agent.process_message(
-            message=enhanced_message, use_context=use_context, max_tokens=max_tokens
-        )
-        processing_time = time.time() - start_time
+        try:
+            result = agent.process_message(
+                message=enhanced_message, use_context=use_context, max_tokens=max_tokens
+            )
+            processing_time = time.time() - start_time
+        except Exception as model_error:
+            processing_time = time.time() - start_time
+            error_msg = str(model_error)
+
+            # Provide specific error messages for common issues
+            if "MPS" in error_msg or "Metal" in error_msg:
+                error_msg = "AI model encountered a graphics processing error. The system will automatically retry with CPU processing."
+            elif "CUDA" in error_msg:
+                error_msg = (
+                    "GPU processing error detected. Falling back to CPU processing."
+                )
+            elif "memory" in error_msg.lower() or "allocation" in error_msg.lower():
+                error_msg = "Insufficient memory to process request. Please try with a shorter message or lower token limit."
+            elif "timeout" in error_msg.lower():
+                error_msg = "AI model processing timed out. Please try again with a simpler question."
+            else:
+                error_msg = f"AI processing error: {error_msg}"
+
+            logger.error(f"Model processing error for user {user_id}: {model_error}")
+
+            # Return error result instead of raising
+            result = {
+                "response": f"I apologize, but I encountered a technical issue while processing your request. {error_msg} Please try again.",
+                "error": True,
+                "error_type": "model_error",
+                "model_used": agent.llm_service.get_model_info().get(
+                    "name", "TinyLlama"
+                ),
+                "context_used": False,
+                "context_sources": 0,
+                "question_type": "error",
+                "processing_time": processing_time,
+            }
 
         cache.set(
             f"task_status:{task_id}",

@@ -4,18 +4,12 @@
 {% block title %}AI Assistant{% endblock %}
 
 {% block content %}
-<style>
-    #agent-type-select option {
-        background-color: #111827; /* gray-900 */
-        color: white;
-    }
-</style>
 <div class="flex flex-col h-[calc(100vh-4rem)] bg-gray-900 border border-gray-700 rounded-lg shadow-sm" id="chat-container">
     <!-- Header -->
     <div class="flex items-center justify-between p-4 border-b border-gray-700">
         <div class="flex items-center gap-3">
             <div id="agent-icon-header" class="text-blue-400">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44l-.5-2.5a2.5 2.5 0 0 1-5.04-.04l-.5 2.5A2.5 2.5 0 0 1 1.5 22v-3.5a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5V22a2.5 2.5 0 0 1-2.5 2.5h-1A2.5 2.5 0 0 1 .5 20v-3.5a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5V20A2.5 2.5 0 0 1 4 22.5h-1a2.5 2.5 0 0 1-2.5-2.5v-3a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3A2.5 2.5 0 0 1 4 21.5h-1a2.5 2.5 0 0 1-2.5-2.5v-3a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5h-1a2.5 2.5 0 0 1-2.5-2.5V17a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5h-1a2.5 2.5 0 0 1-2.5-2.5v-3a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5h-1a2.5 2.5 0 0 1-2.5-2.5V17a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5Z"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44l-.5-2.5a2.5 2.5 0 0 1-5.04-.04l-.5 2.5A2.5 2.5 0 0 1 1.5 22v-3.5a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5V22a2.5 2.5 0 0 1-2.5 2.5h-1A2.5 2.5 0 0 1 .5 20v-3.5a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5V20A2.5 2.5 0 0 1 4 22.5h-1a2.5 2.5 0 0 1-2.5-2.5v-3a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3A2.5 2.5 0 0 1 4 21.5h-1a2.5 2.5 0 0 1-2.5-2.5v-3a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5h-1a2.5 2.5 0 0 1-2.5-2.5V17a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5Z"/></svg>
             </div>
             <div>
                 <h2 class="text-lg font-semibold text-white">Omeruta Brain Assistant</h2>
@@ -25,11 +19,32 @@
                     <span id="model-name-header">{{ initial_status.model_info.name }}</span>
                     <span>•</span>
                     <span id="kb-pages-header">{{ initial_status.knowledge_stats.pages_with_content }} pages</span>
+                    <span>•</span>
+                    <div class="inline-flex items-center gap-1 text-xs" id="websocket-status">
+                        <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse" id="status-dot"></div>
+                        <span id="status-text" class="text-gray-400">Connecting...</span>
+                    </div>
                 </div>
             </div>
         </div>
         <div class="flex items-center gap-2">
-            <button id="settings-btn" class="p-2 text-gray-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            <button id="settings-btn" class="p-2 text-gray-400 hover:text-white transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Progress Bar (Hidden by default) -->
+    <div id="progress-container" class="hidden px-4 py-2 bg-gray-800 border-b border-gray-700">
+        <div class="flex items-center justify-between text-xs text-gray-400 mb-2">
+            <span id="progress-text">Processing...</span>
+            <div class="flex items-center gap-2">
+                <span id="progress-timer" class="font-mono text-yellow-400">00:00</span>
+                <span id="progress-percent">0%</span>
+            </div>
+        </div>
+        <div class="w-full bg-gray-600 rounded-full h-2">
+            <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
         </div>
     </div>
 
@@ -38,7 +53,7 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div class="space-y-2">
                 <label for="agent-type-select" class="text-sm font-medium text-gray-300">Agent Type</label>
-                <select id="agent-type-select" class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-sm text-white focus:outline-none focus:border-blue-500">
+                <select id="agent-type-select" class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                     {% for type in initial_status.available_agent_types %}
                     <option value="{{ type.value }}" {% if type.value == initial_status.agent_type %}selected{% endif %}>{{ type.name }}</option>
                     {% endfor %}
@@ -47,26 +62,53 @@
             <div class="space-y-2">
                 <label for="use-context" class="text-sm font-medium text-gray-300">Use Knowledge Base</label>
                 <div class="flex items-center space-x-2 mt-2">
-                    <input id="use-context-checkbox" type="checkbox" checked class="rounded border border-gray-600 bg-gray-900 text-blue-500 focus:ring-blue-500">
+                    <input id="use-context-checkbox" type="checkbox" checked class="rounded border-gray-600 bg-gray-900 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
                     <span class="text-sm text-gray-400">Search crawled content for context</span>
                 </div>
             </div>
             <div class="space-y-2">
                 <label for="max-tokens" class="text-sm font-medium text-gray-300">Max Tokens</label>
-                <input id="max-tokens-input" type="number" value="300" min="50" max="1000" step="50" class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-sm text-white focus:outline-none focus:border-blue-500">
+                <input id="max-tokens-input" type="number" value="300" min="50" max="1000" step="50" class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+            </div>
+        </div>
+        <div class="flex items-center justify-between pt-2 border-t border-gray-600">
+            <label class="flex items-center gap-2 text-sm text-gray-400">
+                <input type="checkbox" id="websocket-enabled" checked class="rounded border-gray-600 bg-gray-900 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                <span>Use WebSocket (real-time updates)</span>
+            </label>
+            <div class="text-xs text-gray-500">
+                <span id="connection-mode">Real-time mode</span>
             </div>
         </div>
     </div>
 
     <!-- Messages -->
     <div id="message-list" class="flex-1 overflow-y-auto p-4 space-y-4">
-        <!-- Messages will be injected here -->
+        <!-- Welcome message -->
+        <div class="flex justify-start">
+            <div class="flex items-start gap-3 max-w-[80%]">
+                <div class="flex-shrink-0 mt-1 text-blue-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44l-.5-2.5a2.5 2.5 0 0 1-5.04-.04l-.5 2.5A2.5 2.5 0 0 1 1.5 22v-3.5a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5V22a2.5 2.5 0 0 1-2.5 2.5h-1A2.5 2.5 0 0 1 .5 20v-3.5a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5V20A2.5 2.5 0 0 1 4 22.5h-1a2.5 2.5 0 0 1-2.5-2.5v-3a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3A2.5 2.5 0 0 1 4 21.5h-1a2.5 2.5 0 0 1-2.5-2.5v-3a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5h-1a2.5 2.5 0 0 1-2.5-2.5V17a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5Z"/></svg>
+                </div>
+                <div class="bg-gray-700 rounded-lg p-3 text-gray-300">
+                    <div class="text-sm">
+                        Welcome to Omeruta Brain! I'm your AI assistant ready to help with questions about cryptocurrency, technology, and more. 
+                        <span class="text-blue-400 font-medium">WebSocket mode is enabled</span> for real-time communication.
+                    </div>
+                    <div class="mt-2 pt-2 border-t border-gray-600 text-xs text-gray-400 flex items-center gap-2">
+                        <span>{{ initial_status.model_info.name }}</span>
+                        <span>•</span>
+                        <span class="text-green-400">📚 {{ initial_status.knowledge_stats.pages_with_content }} pages available</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Error Display -->
     <div id="error-display" class="hidden mx-4 mb-2 p-3 bg-red-900/50 border border-red-700 rounded-lg">
         <div class="flex items-center gap-2 text-red-400">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 flex-shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
             <span id="error-message" class="text-sm"></span>
         </div>
     </div>
@@ -74,14 +116,36 @@
     <!-- Input -->
     <div class="p-4 border-t border-gray-700">
         <form id="chat-form" class="flex gap-2">
-            <textarea id="message-input" placeholder="Ask anything..." class="flex-1 min-h-[60px] resize-none p-2 bg-gray-800 border border-gray-600 rounded-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" disabled></textarea>
+            <textarea 
+                id="message-input" 
+                placeholder="Ask anything..." 
+                class="flex-1 min-h-[60px] max-h-32 resize-none p-3 bg-gray-800 border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                rows="1"
+            ></textarea>
             <div class="flex flex-col gap-2">
-                <button type="submit" id="send-btn" class="p-2 bg-blue-600 text-white rounded-sm hover:bg-blue-700 disabled:bg-gray-500" disabled><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
-                <button type="button" id="clear-btn" class="p-2 bg-gray-700 text-white rounded-sm hover:bg-gray-600 disabled:bg-gray-500" disabled><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
+                <button 
+                    type="submit" 
+                    id="send-btn" 
+                    class="p-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
+                    disabled
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+                <button 
+                    type="button" 
+                    id="clear-btn" 
+                    class="p-3 bg-gray-700 text-white rounded-md hover:bg-gray-600 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
+                    disabled
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                </button>
             </div>
         </form>
     </div>
 </div>
+
+<!-- Include the WebSocket client library -->
+<script src="{% static 'js/omeruta-brain-client.js' %}"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -89,9 +153,12 @@ document.addEventListener('DOMContentLoaded', function() {
     let isLoading = false;
     let conversationId = "{{ conversation_id|default:'' }}";
     let currentAgentType = "{{ initial_status.agent_type }}";
+    let client = null;
+    let websocketEnabled = true;
+    let progressStartTime = null;
+    let progressTimerInterval = null;
 
     // Elements
-    const chatContainer = document.getElementById('chat-container');
     const messageList = document.getElementById('message-list');
     const chatForm = document.getElementById('chat-form');
     const messageInput = document.getElementById('message-input');
@@ -102,90 +169,232 @@ document.addEventListener('DOMContentLoaded', function() {
     const agentTypeSelect = document.getElementById('agent-type-select');
     const useContextCheckbox = document.getElementById('use-context-checkbox');
     const maxTokensInput = document.getElementById('max-tokens-input');
+    const websocketEnabledCheckbox = document.getElementById('websocket-enabled');
     const errorDisplay = document.getElementById('error-display');
     const errorMessage = document.getElementById('error-message');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const connectionMode = document.getElementById('connection-mode');
+    const progressContainer = document.getElementById('progress-container');
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    const progressPercent = document.getElementById('progress-percent');
+    const progressTimer = document.getElementById('progress-timer');
     
     // Agent type visual map
     const agentVisuals = {
-        general: { color: 'text-blue-400', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44l-.5-2.5a2.5 2.5 0 0 1-5.04-.04l-.5 2.5A2.5 2.5 0 0 1 1.5 22v-3.5a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5V22a2.5 2.5 0 0 1-2.5 2.5h-1A2.5 2.5 0 0 1 .5 20v-3.5a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5V20A2.5 2.5 0 0 1 4 22.5h-1a2.5 2.5 0 0 1-2.5-2.5v-3a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3A2.5 2.5 0 0 1 4 21.5h-1a2.5 2.5 0 0 1-2.5-2.5v-3a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5h-1a2.5 2.5 0 0 1-2.5-2.5V17a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5h-1a2.5 2.5 0 0 1-2.5-2.5v-3a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5h-1a2.5 2.5 0 0 1-2.5-2.5V17a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5Z"/></svg>` },
-        research: { color: 'text-purple-400', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2z"/></svg>` },
-        qa: { color: 'text-green-400', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>` },
-        content_analyzer: { color: 'text-orange-400', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/></svg>` }
+        general: { 
+            color: 'text-blue-400', 
+            icon: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44l-.5-2.5a2.5 2.5 0 0 1-5.04-.04l-.5 2.5A2.5 2.5 0 0 1 1.5 22v-3.5a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5V22a2.5 2.5 0 0 1-2.5 2.5h-1A2.5 2.5 0 0 1 .5 20v-3.5a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5V20A2.5 2.5 0 0 1 4 22.5h-1a2.5 2.5 0 0 1-2.5-2.5v-3a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3A2.5 2.5 0 0 1 4 21.5h-1a2.5 2.5 0 0 1-2.5-2.5v-3a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5h-1a2.5 2.5 0 0 1-2.5-2.5V17a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5Z"/></svg>` 
+        },
+        research: { 
+            color: 'text-purple-400', 
+            icon: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>` 
+        },
+        qa: { 
+            color: 'text-green-400', 
+            icon: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>` 
+        },
+        content_analyzer: { 
+            color: 'text-orange-400', 
+            icon: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M9 11H5a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4l4-4v-7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v3"/><path d="M13 11h6a2 2 0 0 1 2 2v3c0 1.1-.9 2-2 2h-4l-4-4"/></svg>` 
+        }
     };
     
-    // Functions
+    // Helper Functions
     const setUIState = (loading) => {
         isLoading = loading;
         messageInput.disabled = loading;
         sendBtn.disabled = loading || !messageInput.value.trim();
-        clearBtn.disabled = loading || messageList.children.length === 0;
+        clearBtn.disabled = loading || messageList.children.length <= 1; // Keep welcome message
     };
 
     const showError = (message) => {
         errorMessage.textContent = message;
         errorDisplay.classList.remove('hidden');
+        setTimeout(() => hideError(), 5000); // Auto-hide after 5 seconds
     };
 
     const hideError = () => {
         errorDisplay.classList.add('hidden');
     };
 
+    const updateConnectionStatus = (status, type = 'info') => {
+        statusText.textContent = status;
+        statusDot.className = 'w-2 h-2 rounded-full';
+        
+        if (type === 'success' || status.includes('Connected')) {
+            statusDot.classList.add('bg-green-500');
+            connectionMode.textContent = 'Real-time mode';
+        } else if (type === 'connecting' || status.includes('Connecting')) {
+            statusDot.classList.add('bg-yellow-500', 'animate-pulse');
+            connectionMode.textContent = 'Connecting...';
+        } else {
+            statusDot.classList.add('bg-red-500', 'animate-pulse');
+            connectionMode.textContent = 'HTTP fallback';
+        }
+    };
+
+    const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const startProgressTimer = () => {
+        progressStartTime = Date.now();
+        progressTimer.textContent = '00:00';
+        
+        progressTimerInterval = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - progressStartTime) / 1000);
+            progressTimer.textContent = formatTime(elapsed);
+            
+            // Change color based on time elapsed
+            if (elapsed > 30) {
+                progressTimer.className = 'font-mono text-red-400'; // Red after 30s
+            } else if (elapsed > 15) {
+                progressTimer.className = 'font-mono text-orange-400'; // Orange after 15s
+            } else {
+                progressTimer.className = 'font-mono text-yellow-400'; // Yellow default
+            }
+        }, 1000);
+    };
+
+    const stopProgressTimer = () => {
+        if (progressTimerInterval) {
+            clearInterval(progressTimerInterval);
+            progressTimerInterval = null;
+        }
+    };
+
+    const showProgress = (text, percent) => {
+        const wasHidden = progressContainer.classList.contains('hidden');
+        progressContainer.classList.remove('hidden');
+        progressText.textContent = text;
+        progressPercent.textContent = `${percent}%`;
+        progressBar.style.width = `${percent}%`;
+        
+        // Start timer only when first showing progress
+        if (wasHidden) {
+            startProgressTimer();
+        }
+    };
+
+    const hideProgress = () => {
+        progressContainer.classList.add('hidden');
+        progressBar.style.width = '0%';
+        stopProgressTimer();
+        progressTimer.textContent = '00:00';
+        progressTimer.className = 'font-mono text-yellow-400'; // Reset color
+    };
+
     const addMessageToUI = (role, text, metadata = {}) => {
         const messageWrapper = document.createElement('div');
         const visual = agentVisuals[currentAgentType] || agentVisuals.general;
-        const icon = role === 'user' ? 
+        const isUser = role === 'user';
+        
+        const icon = isUser ? 
             `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6 text-gray-400"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>` : 
             visual.icon.replace('class="h-6 w-6"', `class="h-6 w-6 ${visual.color}"`);
 
-        const messageClass = role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300';
-        const justifyClass = role === 'user' ? 'justify-end' : 'justify-start';
+        const messageClass = isUser ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300';
+        const justifyClass = isUser ? 'justify-end' : 'justify-start';
 
         let metaHtml = '';
-        if (role === 'assistant') {
-            metaHtml += `<div class="mt-2 pt-2 border-t border-gray-600 text-xs text-gray-400 flex flex-wrap items-center gap-2">`;
-            if (metadata.model_used) metaHtml += `<span>${metadata.model_used}</span>`;
-            if (metadata.context_used) metaHtml += `<span class="text-green-400">📚 ${metadata.context_sources} sources</span>`;
-            if (metadata.response_time_ms) metaHtml += `<span>${(metadata.response_time_ms / 1000).toFixed(1)}s</span>`;
-            metaHtml += `</div>`;
+        if (!isUser && Object.keys(metadata).length > 0) {
+            metaHtml = `
+                <div class="mt-2 pt-2 border-t border-gray-600 text-xs text-gray-400 flex flex-wrap items-center gap-2">
+                    ${metadata.model_used ? `<span>${metadata.model_used}</span>` : ''}
+                    ${metadata.context_used ? `<span class="text-green-400">📚 ${metadata.context_sources || 0} sources</span>` : ''}
+                    ${metadata.response_time_ms ? `<span>${(metadata.response_time_ms / 1000).toFixed(1)}s</span>` : ''}
+                    ${metadata.agent_type ? `<span class="text-blue-400">${metadata.agent_type}</span>` : ''}
+                </div>
+            `;
         }
 
         messageWrapper.className = `flex gap-3 ${justifyClass}`;
         messageWrapper.innerHTML = `
-            <div class="flex-shrink-0 mt-1">${icon}</div>
-            <div class="max-w-[80%]">
+            <div class="flex items-start gap-3 max-w-[80%]">
+                <div class="flex-shrink-0 mt-1">${icon}</div>
                 <div class="rounded-lg p-3 ${messageClass}">
                     <div class="whitespace-pre-wrap text-sm">${text}</div>
                     ${metaHtml}
                 </div>
             </div>
         `;
+        
         messageList.appendChild(messageWrapper);
         messageList.scrollTop = messageList.scrollHeight;
         return messageWrapper;
     };
 
-    const showLoadingIndicator = () => {
-        const visual = agentVisuals[currentAgentType] || agentVisuals.general;
-        const indicator = document.createElement('div');
-        indicator.id = 'loading-indicator';
-        indicator.className = 'flex justify-start';
-        indicator.innerHTML = `
-            <div class="flex items-start gap-3">
-                <div class="flex-shrink-0 mt-1">${visual.icon.replace('class="h-6 w-6"', `class="h-6 w-6 ${visual.color}"`)}</div>
-                <div class="bg-gray-700 rounded-lg p-3 max-w-[70%]">
-                    <div class="flex items-center gap-2 text-gray-400">
-                        <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                        <span class="text-sm">Omeruta Brain is thinking...</span>
-                    </div>
-                </div>
-            </div>`;
-        messageList.appendChild(indicator);
-        messageList.scrollTop = messageList.scrollHeight;
-    };
+    // Initialize WebSocket client with custom handlers
+    const initializeWebSocket = () => {
+        if (!websocketEnabled) return;
+        
+        try {
+            const csrfToken = '{{ csrf_token }}';
+            client = new OmerutaBrainClient(window.location.origin + '/api', csrfToken);
+            
+            // Override client methods to integrate with our UI
+            client.showConnectionStatus = (status, type) => {
+                updateConnectionStatus(status, type);
+            };
 
-    const removeLoadingIndicator = () => {
-        const indicator = document.getElementById('loading-indicator');
-        if (indicator) indicator.remove();
+            client.displayUserMessage = (message, chatId) => {
+                // Skip - we handle this in our sendMessage function
+            };
+
+            client.displayAIMessage = (message, chatId, metadata = {}) => {
+                hideProgress();
+                addMessageToUI('assistant', message, metadata);
+                setUIState(false);
+            };
+
+            client.showTypingIndicator = (chatId, message) => {
+                // Extract progress if available
+                if (message.includes('%')) {
+                    const match = message.match(/(\d+)%/);
+                    const percent = match ? parseInt(match[1]) : 0;
+                    showProgress(message.replace(/\d+%\s*/, ''), percent);
+                } else {
+                    showProgress(message, 0);
+                }
+            };
+
+            client.updateChatProgress = (chatId, data) => {
+                if (data.progress !== undefined && data.message) {
+                    showProgress(data.message, data.progress);
+                }
+            };
+
+            client.handleChatCompletion = (chatId, data) => {
+                hideProgress();
+                if (data.result && data.result.response) {
+                    addMessageToUI('assistant', data.result.response, data.result);
+                    if (data.result.conversation_id) {
+                        conversationId = data.result.conversation_id;
+                    }
+                } else if (data.error) {
+                    showError(data.error);
+                }
+                setUIState(false);
+            };
+
+            client.showError = (message, chatId) => {
+                hideProgress();
+                showError(message);
+                setUIState(false);
+            };
+
+            // Connect
+            client.connectWebSocket();
+            
+        } catch (error) {
+            console.warn('WebSocket initialization failed:', error);
+            updateConnectionStatus('HTTP fallback', 'error');
+            websocketEnabled = false;
+        }
     };
 
     const sendMessage = async () => {
@@ -196,51 +405,71 @@ document.addEventListener('DOMContentLoaded', function() {
         setUIState(true);
         addMessageToUI('user', message);
         messageInput.value = '';
-        showLoadingIndicator();
+        
+        const options = {
+            conversationId: conversationId || null,
+            agentType: currentAgentType,
+            useContext: useContextCheckbox.checked,
+            maxTokens: parseInt(maxTokensInput.value, 10),
+        };
 
         try {
-            const response = await fetch('/ai/api/agents/tinyllama/chat/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({
-                    message: message,
-                    use_context: useContextCheckbox.checked,
-                    max_tokens: parseInt(maxTokensInput.value, 10),
-                    conversation_id: conversationId || null,
-                })
-            });
+            if (websocketEnabled && client && client.socket && client.socket.readyState === WebSocket.OPEN) {
+                // Use WebSocket
+                const chatId = await client.startChat(message, options);
+                if (!conversationId) conversationId = chatId;
+            } else {
+                // Fallback to HTTP
+                showProgress('Processing request...', 10);
+                const response = await fetch('/ai/api/agents/tinyllama/chat/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        agent_type: currentAgentType,
+                        use_context: useContextCheckbox.checked,
+                        max_tokens: parseInt(maxTokensInput.value, 10),
+                        conversation_id: conversationId || null,
+                    })
+                });
 
-            removeLoadingIndicator();
-            const data = await response.json();
+                hideProgress();
+                const data = await response.json();
 
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to get a response.');
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to get a response.');
+                }
+                
+                if (!conversationId) {
+                    conversationId = data.conversation_id;
+                }
+
+                addMessageToUI('assistant', data.response, data);
+                setUIState(false);
             }
-            
-            if (!conversationId) {
-                conversationId = data.conversation_id;
-            }
-
-            addMessageToUI('assistant', data.response, data);
-
         } catch (err) {
-            removeLoadingIndicator();
-            showError(err.message);
-        } finally {
+            hideProgress();
+            showError(`Request failed after ${progressTimer.textContent}: ${err.message}`);
             setUIState(false);
         }
     };
 
     const clearChat = async () => {
+        // Keep only the welcome message
+        const welcomeMessage = messageList.children[0];
         messageList.innerHTML = '';
+        messageList.appendChild(welcomeMessage);
+        
         hideError();
-        if(conversationId) {
+        hideProgress();
+        
+        if (conversationId) {
             try {
                 await fetch('/ai/api/agents/tinyllama/clear_conversation/', {
-                     method: 'POST',
+                    method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
                     body: JSON.stringify({ conversation_id: conversationId })
                 });
@@ -255,20 +484,28 @@ document.addEventListener('DOMContentLoaded', function() {
     const changeAgentType = async (newType) => {
         currentAgentType = newType;
         try {
-            await fetch('/ai/api/agents/tinyllama/change_agent_type/', {
+            const response = await fetch('/ai/api/agents/tinyllama/change_agent_type/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
                 body: JSON.stringify({ agent_type: newType })
             });
-            const visual = agentVisuals[newType] || agentVisuals.general;
-            document.getElementById('agent-icon-header').innerHTML = visual.icon;
-            document.getElementById('agent-icon-header').className = visual.color;
-            document.getElementById('agent-type-header').textContent = newType.charAt(0).toUpperCase() + newType.slice(1).replace('_', ' ');
-            document.getElementById('agent-type-header').className = `font-medium capitalize ${visual.color}`;
-
+            
+            if (response.ok) {
+                const visual = agentVisuals[newType] || agentVisuals.general;
+                document.getElementById('agent-icon-header').innerHTML = visual.icon;
+                document.getElementById('agent-icon-header').className = visual.color;
+                document.getElementById('agent-type-header').textContent = newType.charAt(0).toUpperCase() + newType.slice(1).replace('_', ' ');
+                document.getElementById('agent-type-header').className = `font-medium capitalize ${visual.color}`;
+            }
         } catch (err) {
             showError('Failed to change agent type.');
         }
+    };
+
+    // Auto-resize textarea
+    const autoResizeTextarea = () => {
+        messageInput.style.height = 'auto';
+        messageInput.style.height = Math.min(messageInput.scrollHeight, 128) + 'px';
     };
     
     // Event Listeners
@@ -285,15 +522,34 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     messageInput.addEventListener('input', () => {
-       sendBtn.disabled = isLoading || !messageInput.value.trim();
+        autoResizeTextarea();
+        sendBtn.disabled = isLoading || !messageInput.value.trim();
     });
 
     clearBtn.addEventListener('click', clearChat);
     settingsBtn.addEventListener('click', () => settingsPanel.classList.toggle('hidden'));
     agentTypeSelect.addEventListener('change', (e) => changeAgentType(e.target.value));
+    
+    websocketEnabledCheckbox.addEventListener('change', (e) => {
+        websocketEnabled = e.target.checked;
+        if (websocketEnabled) {
+            updateConnectionStatus('Connecting...', 'connecting');
+            initializeWebSocket();
+        } else {
+            if (client) {
+                client.disconnect();
+            }
+            updateConnectionStatus('HTTP mode', 'error');
+        }
+    });
 
     // Initial setup
+    updateConnectionStatus('Connecting...', 'connecting');
+    if (websocketEnabled) {
+        initializeWebSocket();
+    }
     setUIState(false);
+    autoResizeTextarea();
 });
 </script>
 {% endblock %} 

@@ -4,7 +4,14 @@ from django.conf import settings
 from typing import Optional, Dict, Any
 import logging
 import gc
-from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline
+import os
+
+# Use the updated import to fix deprecation warning
+try:
+    from langchain_huggingface import HuggingFacePipeline
+except ImportError:
+    # Fallback to the old import if the new package isn't installed
+    from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline
 
 logger = logging.getLogger(__name__)
 
@@ -17,60 +24,91 @@ class TinyLlamaService:
         self.tokenizer = None
         self.pipeline = None
         self.llm = None
-        # Properly detect device with MPS support
-        if torch.cuda.is_available():
-            self.device = "cuda"
-        elif torch.backends.mps.is_available():
-            self.device = "mps"
-        else:
-            self.device = "cpu"
+        self.device = self._get_optimal_device()
         self.model_loaded = False
         self.max_retries = 3
 
+    def _get_optimal_device(self) -> str:
+        """Determine the best available device with proper fallback"""
+        try:
+            # Check for force CPU environment variable
+            if os.getenv("FORCE_CPU_ONLY", "false").lower() == "true":
+                logger.info("Forced CPU usage via FORCE_CPU_ONLY environment variable")
+                return "cpu"
+
+            # Check CUDA first (most reliable)
+            if torch.cuda.is_available():
+                logger.info("Using CUDA device")
+                return "cuda"
+
+            # For MPS, be very conservative due to Metal shader issues
+            if torch.backends.mps.is_available():
+                # Disable MPS entirely for now due to Metal shader compilation issues
+                logger.warning(
+                    "MPS available but disabled due to Metal shader compilation issues"
+                )
+                return "cpu"
+
+            # Fallback to CPU
+            logger.info("Using CPU device")
+            return "cpu"
+
+        except Exception as e:
+            logger.warning(f"Error detecting device, using CPU: {e}")
+            return "cpu"
+
     def initialize_model(self) -> bool:
-        """Initialize TinyLlama model"""
+        """Initialize TinyLlama model with device fallback"""
         if self.model_loaded:
             return True
 
+        # Try with current device, fallback if it fails
+        for attempt in range(2):  # Try current device, then CPU fallback
+            try:
+                device_to_use = self.device if attempt == 0 else "cpu"
+                if attempt == 1:
+                    logger.warning(
+                        f"Falling back from {self.device} to CPU due to errors"
+                    )
+                    self.device = "cpu"
+
+                return self._load_model_on_device(device_to_use)
+
+            except Exception as e:
+                logger.error(f"Attempt {attempt + 1} failed on {device_to_use}: {e}")
+                if attempt == 0 and self.device != "cpu":
+                    # Clean up before trying CPU
+                    self.cleanup_model()
+                    continue
+                else:
+                    # Final attempt failed
+                    logger.error("❌ Failed to load TinyLlama on any device")
+                    return False
+
+        return False
+
+    def _load_model_on_device(self, device: str) -> bool:
+        """Load model on specific device"""
         try:
             model_name = settings.AI_MODELS["LOCAL_MODELS"]["tinyllama"]["model_name"]
-
-            logger.info(f"Loading TinyLlama on {self.device}...")
+            logger.info(f"Loading TinyLlama on {device}...")
 
             # Load tokenizer
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
 
-            # Load model with proper device handling
-            if self.device == "cuda":
+            # Device-specific model loading
+            if device == "cuda":
                 model_kwargs = {
                     "torch_dtype": torch.float16,
                     "low_cpu_mem_usage": True,
                     "device_map": "auto",
                 }
-            elif self.device == "mps":
-                model_kwargs = {
-                    "torch_dtype": torch.float32,  # MPS works better with float32
-                    "low_cpu_mem_usage": True,
-                }
-            else:
-                model_kwargs = {
-                    "torch_dtype": torch.float32,
-                    "low_cpu_mem_usage": True,
-                }
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name, **model_kwargs
+                )
 
-            # Load model without automatic device mapping for MPS
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name, **model_kwargs
-            )
-
-            # Move model to device after loading (except for CUDA with device_map)
-            if self.device != "cuda":
-                self.model = self.model.to(self.device)
-
-            # Create pipeline with proper device configuration
-            if self.device == "cuda":
                 self.pipeline = pipeline(
                     "text-generation",
                     model=self.model,
@@ -78,24 +116,59 @@ class TinyLlamaService:
                     device_map="auto",
                     torch_dtype=torch.float16,
                 )
-            else:
+
+            elif device == "mps":
+                # More conservative MPS settings
+                model_kwargs = {
+                    "torch_dtype": torch.float32,
+                    "low_cpu_mem_usage": True,
+                }
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name, **model_kwargs
+                )
+
+                # Move to MPS with error handling
+                try:
+                    self.model = self.model.to("mps")
+
+                    self.pipeline = pipeline(
+                        "text-generation",
+                        model=self.model,
+                        tokenizer=self.tokenizer,
+                        device=0,  # Use device 0 for MPS
+                        torch_dtype=torch.float32,
+                    )
+                except Exception as mps_error:
+                    logger.error(f"MPS model placement failed: {mps_error}")
+                    raise mps_error
+
+            else:  # CPU
+                model_kwargs = {
+                    "torch_dtype": torch.float32,
+                    "low_cpu_mem_usage": True,
+                }
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name, **model_kwargs
+                )
+
                 self.pipeline = pipeline(
                     "text-generation",
                     model=self.model,
                     tokenizer=self.tokenizer,
-                    device=0 if self.device == "mps" else -1,  # 0 for MPS, -1 for CPU
+                    device=-1,  # -1 for CPU
                     torch_dtype=torch.float32,
                 )
 
+            # Create LangChain wrapper
             self.llm = HuggingFacePipeline(pipeline=self.pipeline)
             self.model_loaded = True
-            logger.info("✅ TinyLlama loaded successfully!")
+            logger.info(f"✅ TinyLlama loaded successfully on {device}!")
             return True
 
         except Exception as e:
-            logger.error(f"❌ Failed to load TinyLlama: {e}")
+            logger.error(f"❌ Failed to load TinyLlama on {device}: {e}")
             self.cleanup_model()
-            return False
+            raise e
 
     def generate_response(
         self,
@@ -104,7 +177,7 @@ class TinyLlamaService:
         temperature: float = 0.7,
         system_prompt: str = "You are a helpful assistant.",
     ) -> Optional[str]:
-        """Generate response using TinyLlama"""
+        """Generate response using TinyLlama with error handling"""
 
         if not self.model_loaded and not self.initialize_model():
             return None
@@ -113,17 +186,34 @@ class TinyLlamaService:
             # Format prompt for TinyLlama chat format
             formatted_prompt = self._format_chat_prompt(prompt, system_prompt)
 
-            # Generate response
-            outputs = self.pipeline(
-                formatted_prompt,
-                max_new_tokens=max_tokens,
-                temperature=temperature,
-                do_sample=True,
-                pad_token_id=self.tokenizer.eos_token_id,
-                eos_token_id=self.tokenizer.eos_token_id,
-                repetition_penalty=1.1,
-                return_full_text=False,
-            )
+            # Generate response with device-specific error handling
+            try:
+                outputs = self.pipeline(
+                    formatted_prompt,
+                    max_new_tokens=max_tokens,
+                    temperature=temperature,
+                    do_sample=True,
+                    pad_token_id=self.tokenizer.eos_token_id,
+                    eos_token_id=self.tokenizer.eos_token_id,
+                    repetition_penalty=1.1,
+                    return_full_text=False,
+                )
+            except RuntimeError as e:
+                if "MPS" in str(e) or "Metal" in str(e):
+                    logger.error(
+                        f"MPS error during generation, attempting CPU fallback: {e}"
+                    )
+                    # Try to reinitialize on CPU
+                    self.cleanup_model()
+                    self.device = "cpu"
+                    if self.initialize_model():
+                        return self.generate_response(
+                            prompt, max_tokens, temperature, system_prompt
+                        )
+                    else:
+                        return None
+                else:
+                    raise e
 
             if outputs and len(outputs) > 0:
                 response = outputs[0]["generated_text"].strip()
@@ -159,26 +249,38 @@ class TinyLlamaService:
 
     def cleanup_model(self):
         """Clean up model from memory"""
-        if self.model:
-            del self.model
-        if self.tokenizer:
-            del self.tokenizer
-        if self.pipeline:
-            del self.pipeline
+        try:
+            if self.model:
+                del self.model
+            if self.tokenizer:
+                del self.tokenizer
+            if self.pipeline:
+                del self.pipeline
+            if self.llm:
+                del self.llm
 
-        self.model = None
-        self.tokenizer = None
-        self.pipeline = None
-        self.model_loaded = False
+            self.model = None
+            self.tokenizer = None
+            self.pipeline = None
+            self.llm = None
+            self.model_loaded = False
 
-        # Force garbage collection
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        elif torch.backends.mps.is_available():
-            torch.mps.empty_cache()
+            # Force garbage collection
+            gc.collect()
 
-        logger.info("🧹 Model cleaned from memory")
+            # Clear device-specific cache
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            elif self.device == "mps" and torch.backends.mps.is_available():
+                try:
+                    torch.mps.empty_cache()
+                except Exception as e:
+                    logger.warning(f"Error clearing MPS cache: {e}")
+
+            logger.info("🧹 Model cleaned from memory")
+
+        except Exception as e:
+            logger.warning(f"Error during cleanup: {e}")
 
     def is_available(self) -> bool:
         """Check if model is available"""
@@ -195,6 +297,12 @@ class TinyLlamaService:
 
     def _get_memory_usage(self) -> float:
         """Get current memory usage in GB"""
-        if self.device == "cuda" and torch.cuda.is_available():
-            return torch.cuda.memory_allocated() / 1e9
-        return 0.0
+        try:
+            if self.device == "cuda" and torch.cuda.is_available():
+                return torch.cuda.memory_allocated() / 1e9
+            elif self.device == "mps" and torch.backends.mps.is_available():
+                # MPS doesn't have direct memory monitoring, return estimated
+                return 0.5  # Rough estimate for TinyLlama
+            return 0.0
+        except Exception:
+            return 0.0
