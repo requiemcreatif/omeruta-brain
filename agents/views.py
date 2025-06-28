@@ -2,7 +2,11 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .services.tinyllama_agent import TinyLlamaAgent
+from .services.enhanced_tinyllama_agent import EnhancedTinyLlamaAgent
 from .services.conversation_memory import ConversationMemory
+from knowledge_base.services.enhanced_rag import EnhancedRAGService
+from knowledge_base.services.pgvector_search import PgVectorSearchService
+from knowledge_base.tasks import generate_embeddings_for_page, batch_generate_embeddings
 from .tasks import (
     process_user_message_async,
     process_multiagent_query,
@@ -24,9 +28,14 @@ class AIAssistantView(View):
     template_name = "agents/ai_assistant.html"
 
     def get(self, request, *args, **kwargs):
-        agent = TinyLlamaAgent()
-        status = agent.get_available_knowledge_stats()
-        model_info = agent.llm_service.get_model_info()
+        # Use enhanced agent for better stats
+        agent = EnhancedTinyLlamaAgent()
+        status = agent.get_knowledge_stats()
+        model_info = (
+            agent.llm_service.get_model_info()
+            if agent.llm_service.is_available()
+            else {}
+        )
 
         available_agent_types = list(agent.system_prompts.keys())
 
@@ -55,13 +64,16 @@ class AIAssistantView(View):
 
 
 class TinyLlamaViewSet(viewsets.GenericViewSet):
-    """Enhanced ViewSet with conversation memory"""
+    """Enhanced ViewSet with advanced RAG and conversation memory"""
 
     permission_classes = [permissions.IsAuthenticated]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.agent = TinyLlamaAgent()
+        self.enhanced_agent = EnhancedTinyLlamaAgent()
+        self.search_service = PgVectorSearchService()
+        self.rag_service = EnhancedRAGService()
 
     @action(detail=False, methods=["post"])
     def chat(self, request):
@@ -410,6 +422,194 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
                 ],
             }
         )
+
+    @action(detail=False, methods=["post"])
+    def enhanced_chat(self, request):
+        """Enhanced chat with advanced RAG pipeline"""
+        try:
+            data = request.data
+            message = data.get("message", "").strip()
+
+            if not message:
+                return Response(
+                    {"error": "Message is required"}, status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Extract configuration
+            config = {
+                "agent_type": data.get("agent_type", "general"),
+                "use_context": data.get("use_context", True),
+                "conversation_id": data.get("conversation_id"),
+                "response_config": {
+                    "style": data.get("style", "informative"),
+                    "max_length": data.get("max_length", "medium"),
+                    "max_tokens": data.get("max_tokens", 400),
+                    "temperature": data.get("temperature", 0.7),
+                    "include_sources": data.get("include_sources", True),
+                },
+                "context_filters": {
+                    "min_quality": data.get("min_quality", 0.3),
+                    "page_urls": data.get("page_urls"),
+                    "content_types": data.get("content_types", {}),
+                },
+            }
+
+            # Update agent type if different
+            if config["agent_type"] != self.enhanced_agent.agent_type:
+                self.enhanced_agent.agent_type = config["agent_type"]
+
+            # Handle conversation memory if conversation_id provided
+            conversation_history = None
+            if config["conversation_id"]:
+                memory = ConversationMemory(config["conversation_id"])
+                conversation_context = memory.get_conversation_context()
+                if conversation_context:
+                    # Enhance message with conversation context
+                    enhanced_message = f"Recent conversation context:\n{conversation_context}\n\nCurrent question: {message}"
+                else:
+                    enhanced_message = message
+            else:
+                enhanced_message = message
+
+            # Process message with enhanced agent
+            result = self.enhanced_agent.process_message(
+                message=enhanced_message,
+                use_context=config["use_context"],
+                response_config=config["response_config"],
+                context_filters=config["context_filters"],
+            )
+
+            # Store in conversation memory if conversation_id provided
+            if config["conversation_id"]:
+                memory = ConversationMemory(config["conversation_id"])
+                memory.add_exchange(
+                    user_message=message,
+                    agent_response=result["response"],
+                    metadata={
+                        "context_used": result.get("used_context", False),
+                        "context_sources": len(result.get("sources", [])),
+                        "agent_type": result.get("agent_type", "general"),
+                        "response_time_ms": result.get("processing_time_ms", 0),
+                        "quality_scores": result.get("quality_scores", {}),
+                    },
+                )
+                result["conversation_id"] = memory.conversation_id
+
+            return Response(result, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Enhanced chat error: {e}")
+            return Response(
+                {"error": f"Failed to process message: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=False, methods=["post"])
+    def search_knowledge(self, request):
+        """Direct knowledge base search with enhanced results"""
+        try:
+            query = request.data.get("query", "").strip()
+            if not query:
+                return Response(
+                    {"error": "Query is required"}, status=status.HTTP_400_BAD_REQUEST
+                )
+
+            filters = request.data.get("filters", {})
+            result = self.search_service.enhanced_search(query, filters)
+
+            return Response(result, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Knowledge search error: {e}")
+            return Response(
+                {"error": f"Search failed: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=False, methods=["get"])
+    def enhanced_stats(self, request):
+        """Get comprehensive enhanced knowledge base statistics"""
+        try:
+            stats = self.enhanced_agent.get_knowledge_stats()
+            return Response(stats, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Enhanced stats error: {e}")
+            return Response(
+                {"error": f"Failed to get stats: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=False, methods=["post"])
+    def generate_embeddings(self, request):
+        """Trigger embedding generation for pages"""
+        try:
+            page_ids = request.data.get("page_ids", [])
+            force_regenerate = request.data.get("force_regenerate", False)
+            use_async = request.data.get("async", True)
+
+            if use_async:
+                if page_ids:
+                    task = batch_generate_embeddings.delay(page_ids, force_regenerate)
+                else:
+                    task = batch_generate_embeddings.delay(None, force_regenerate)
+
+                return Response(
+                    {
+                        "task_id": task.id,
+                        "status": "started",
+                        "message": "Embedding generation started in background",
+                    },
+                    status=status.HTTP_202_ACCEPTED,
+                )
+            else:
+                # Synchronous processing (for small batches only)
+                if len(page_ids) > 10:
+                    return Response(
+                        {"error": "Use async=true for more than 10 pages"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                from knowledge_base.services.embedding_generator import (
+                    EmbeddingGenerationService,
+                )
+
+                embedding_service = EmbeddingGenerationService()
+                result = embedding_service.batch_process_pages(
+                    page_ids, force_regenerate
+                )
+
+                return Response(result, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Embedding generation error: {e}")
+            return Response(
+                {"error": f"Failed to generate embeddings: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=False, methods=["post"])
+    def get_context(self, request):
+        """Get context for a query without generating full response"""
+        try:
+            query = request.data.get("query", "").strip()
+            if not query:
+                return Response(
+                    {"error": "Query is required"}, status=status.HTTP_400_BAD_REQUEST
+                )
+
+            max_length = request.data.get("max_context_length", 2000)
+            context_info = self.enhanced_agent.get_conversation_context(
+                query, max_length
+            )
+
+            return Response(context_info, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Get context error: {e}")
+            return Response(
+                {"error": f"Failed to get context: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class AsyncAgentViewSet(viewsets.GenericViewSet):

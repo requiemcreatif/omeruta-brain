@@ -182,3 +182,6 @@ yarl==1.20.1
 zipp==3.23.0
 zope.interface==7.2
 zstandard==0.23.0
+
+# Vector Database & Enhanced RAG
+pgvector==0.4.1

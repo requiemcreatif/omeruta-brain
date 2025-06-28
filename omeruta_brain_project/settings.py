@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "authentication",
     "crawler",
     "agents",
+    "knowledge_base",
     "tailwind",
     "theme",
     "django_browser_reload",
@@ -281,13 +282,20 @@ AI_MODELS = {
     "AUTO_FALLBACK": True,
 }
 
-# Vector Database Configuration
+# Vector Database Configuration with pgvector
 VECTOR_SETTINGS = {
     "EMBEDDING_MODEL": "all-MiniLM-L6-v2",
-    "CHUNK_SIZE": 1000,
-    "CHUNK_OVERLAP": 100,
+    "EMBEDDING_DIMENSIONS": 384,  # all-MiniLM-L6-v2 dimensions
+    "CHUNK_SIZE": 512,  # Smaller chunks for better retrieval
+    "CHUNK_OVERLAP": 50,  # Reduced overlap
     "SIMILARITY_THRESHOLD": 0.7,
     "MAX_CONTEXT_TOKENS": 2000,
+    "RERANK_TOP_K": 20,  # Retrieve more, then rerank
+    "FINAL_TOP_K": 5,  # Final number of chunks to use
+    "USE_CROSS_ENCODER": True,
+    "CROSS_ENCODER_MODEL": "cross-encoder/ms-marco-MiniLM-L-2-v2",
+    "QUERY_EXPANSION": True,
+    "DIVERSITY_THRESHOLD": 0.8,  # Avoid too similar results
 }
 
 # Celery Configuration

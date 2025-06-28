@@ -48,7 +48,7 @@
         </div>
     </div>
 
-    <!-- Settings Panel -->
+    <!-- Enhanced Settings Panel -->
     <div id="settings-panel" class="hidden p-4 border-b border-gray-700 bg-gray-800/50 space-y-4">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div class="space-y-2">
@@ -60,25 +60,64 @@
                 </select>
             </div>
             <div class="space-y-2">
-                <label for="use-context" class="text-sm font-medium text-gray-300">Use Knowledge Base</label>
-                <div class="flex items-center space-x-2 mt-2">
-                    <input id="use-context-checkbox" type="checkbox" checked class="rounded border-gray-600 bg-gray-900 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
-                    <span class="text-sm text-gray-400">Search crawled content for context</span>
-                </div>
+                <label for="response-style" class="text-sm font-medium text-gray-300">Response Style</label>
+                <select id="response-style-select" class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <option value="informative" selected>Informative</option>
+                    <option value="concise">Concise</option>
+                    <option value="detailed">Detailed</option>
+                    <option value="analytical">Analytical</option>
+                </select>
             </div>
             <div class="space-y-2">
                 <label for="max-tokens" class="text-sm font-medium text-gray-300">Max Tokens</label>
-                <input id="max-tokens-input" type="number" value="300" min="50" max="1000" step="50" class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                <input id="max-tokens-input" type="number" value="400" min="50" max="1000" step="50" class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
             </div>
         </div>
-        <div class="flex items-center justify-between pt-2 border-t border-gray-600">
-            <label class="flex items-center gap-2 text-sm text-gray-400">
-                <input type="checkbox" id="websocket-enabled" checked class="rounded border-gray-600 bg-gray-900 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
-                <span>Use WebSocket (real-time updates)</span>
-            </label>
-            <div class="text-xs text-gray-500">
-                <span id="connection-mode">Real-time mode</span>
+        
+        <!-- Enhanced RAG Settings -->
+        <div class="space-y-3 pt-2 border-t border-gray-600">
+            <h4 class="text-sm font-medium text-gray-300">🧠 Enhanced RAG Settings</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-2">
+                    <label class="flex items-center gap-2 text-sm text-gray-400">
+                        <input id="use-context-checkbox" type="checkbox" checked class="rounded border-gray-600 bg-gray-900 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                        <span>🔍 Use Knowledge Base</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-400">
+                        <input id="include-sources-checkbox" type="checkbox" checked class="rounded border-gray-600 bg-gray-900 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                        <span>📚 Show Sources</span>
+                    </label>
+                </div>
+                <div class="space-y-2">
+                    <label class="flex items-center gap-2 text-sm text-gray-400">
+                        <input id="show-quality-scores-checkbox" type="checkbox" checked class="rounded border-gray-600 bg-gray-900 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                        <span>📊 Show Quality Metrics</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-400">
+                        <input id="websocket-enabled" type="checkbox" checked class="rounded border-gray-600 bg-gray-900 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                        <span>⚡ Real-time Updates</span>
+                    </label>
+                </div>
             </div>
+            
+            <!-- Quality Threshold -->
+            <div class="space-y-2">
+                <label for="quality-threshold" class="text-sm font-medium text-gray-300">Quality Threshold</label>
+                <div class="flex items-center gap-3">
+                    <input id="quality-threshold-range" type="range" min="0" max="1" step="0.1" value="0.3" class="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                    <span id="quality-threshold-value" class="text-sm text-gray-400 w-8">30%</span>
+                </div>
+                <div class="text-xs text-gray-500">Higher values = better quality sources only</div>
+            </div>
+        </div>
+        
+        <div class="flex items-center justify-between pt-2 border-t border-gray-600">
+            <div class="text-xs text-gray-500">
+                <span id="connection-mode">Enhanced RAG mode</span>
+            </div>
+            <button id="refresh-stats-btn" class="text-xs text-blue-400 hover:text-blue-300">
+                🔄 Refresh Stats
+            </button>
         </div>
     </div>
 
@@ -92,13 +131,17 @@
                 </div>
                 <div class="bg-gray-700 rounded-lg p-3 text-gray-300">
                     <div class="text-sm">
-                        Welcome to Omeruta Brain! I'm your AI assistant ready to help with questions about cryptocurrency, technology, and more. 
-                        <span class="text-blue-400 font-medium">WebSocket mode is enabled</span> for real-time communication.
+                        Welcome to Omeruta Brain! I'm your enhanced AI assistant powered by advanced RAG technology. 
+                        I can search through <span class="text-green-400 font-medium">{{ initial_status.knowledge_stats.total_embeddings|default:"0" }} knowledge chunks</span> 
+                        with <span class="text-purple-400 font-medium">{{ initial_status.knowledge_stats.processing_percentage|default:"0"|floatformat:1 }}% coverage</span>.
+                        <span class="text-blue-400 font-medium">Enhanced RAG mode is active</span> for intelligent responses.
                     </div>
                     <div class="mt-2 pt-2 border-t border-gray-600 text-xs text-gray-400 flex items-center gap-2">
-                        <span>{{ initial_status.model_info.name }}</span>
+                        <span>{{ initial_status.model_info.name|default:"TinyLlama" }}</span>
                         <span>•</span>
-                        <span class="text-green-400">📚 {{ initial_status.knowledge_stats.pages_with_content }} pages available</span>
+                        <span class="text-green-400">📚 {{ initial_status.knowledge_stats.pages_with_embeddings|default:"0" }} pages indexed</span>
+                        <span>•</span>
+                        <span class="text-purple-400">🎯 Vector search enabled</span>
                     </div>
                 </div>
             </div>
@@ -180,6 +223,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const progressText = document.getElementById('progress-text');
     const progressPercent = document.getElementById('progress-percent');
     const progressTimer = document.getElementById('progress-timer');
+    
+    // Enhanced settings elements
+    const responseStyleSelect = document.getElementById('response-style-select');
+    const includeSourcesCheckbox = document.getElementById('include-sources-checkbox');
+    const showQualityScoresCheckbox = document.getElementById('show-quality-scores-checkbox');
+    const qualityThresholdRange = document.getElementById('quality-threshold-range');
+    const qualityThresholdValue = document.getElementById('quality-threshold-value');
+    const refreshStatsBtn = document.getElementById('refresh-stats-btn');
     
     // Agent type visual map
     const agentVisuals = {
@@ -302,12 +353,50 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let metaHtml = '';
         if (!isUser && Object.keys(metadata).length > 0) {
+            // Enhanced metadata display
+            let qualityHtml = '';
+            if (showQualityScoresCheckbox.checked && metadata.quality_scores && Object.keys(metadata.quality_scores).length > 0) {
+                const scores = metadata.quality_scores;
+                qualityHtml = `
+                    <div class="mt-1 flex flex-wrap gap-1">
+                        ${scores.relevance ? `<span class="px-2 py-1 bg-green-600/20 text-green-400 rounded text-xs">Relevance: ${(scores.relevance * 100).toFixed(0)}%</span>` : ''}
+                        ${scores.context_usage ? `<span class="px-2 py-1 bg-blue-600/20 text-blue-400 rounded text-xs">Context: ${(scores.context_usage * 100).toFixed(0)}%</span>` : ''}
+                        ${scores.overall ? `<span class="px-2 py-1 bg-purple-600/20 text-purple-400 rounded text-xs">Overall: ${(scores.overall * 100).toFixed(0)}%</span>` : ''}
+                    </div>
+                `;
+            }
+
+            let sourcesHtml = '';
+            if (includeSourcesCheckbox.checked && metadata.sources && metadata.sources.length > 0) {
+                sourcesHtml = `
+                    <div class="mt-2 space-y-1">
+                        <div class="text-xs font-medium text-gray-400">Sources:</div>
+                        ${metadata.sources.slice(0, 3).map(source => `
+                            <div class="text-xs bg-gray-800 rounded p-2">
+                                <div class="font-medium text-blue-400 truncate" title="${source.title}">${source.title}</div>
+                                <div class="text-gray-500 text-xs mt-1">${source.chunk_preview}</div>
+                                <div class="flex gap-2 mt-1">
+                                    <span class="text-green-400">Quality: ${(source.quality_score * 100).toFixed(0)}%</span>
+                                    <span class="text-purple-400">Relevance: ${(source.relevance_score * 100).toFixed(0)}%</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                        ${metadata.sources.length > 3 ? `<div class="text-xs text-gray-500">+ ${metadata.sources.length - 3} more sources</div>` : ''}
+                    </div>
+                `;
+            }
+
             metaHtml = `
-                <div class="mt-2 pt-2 border-t border-gray-600 text-xs text-gray-400 flex flex-wrap items-center gap-2">
-                    ${metadata.model_used ? `<span>${metadata.model_used}</span>` : ''}
-                    ${metadata.context_used ? `<span class="text-green-400">📚 ${metadata.context_sources || 0} sources</span>` : ''}
-                    ${metadata.response_time_ms ? `<span>${(metadata.response_time_ms / 1000).toFixed(1)}s</span>` : ''}
-                    ${metadata.agent_type ? `<span class="text-blue-400">${metadata.agent_type}</span>` : ''}
+                <div class="mt-2 pt-2 border-t border-gray-600 text-xs text-gray-400">
+                    <div class="flex flex-wrap items-center gap-2">
+                        ${metadata.model_used ? `<span>${metadata.model_used}</span>` : ''}
+                        ${metadata.context_used ? `<span class="text-green-400">📚 ${metadata.context_sources || 0} sources</span>` : ''}
+                        ${metadata.response_time_ms ? `<span class="text-yellow-400">⚡ ${(metadata.response_time_ms / 1000).toFixed(2)}s</span>` : ''}
+                        ${metadata.agent_type ? `<span class="text-blue-400 capitalize">${metadata.agent_type}</span>` : ''}
+                        ${metadata.search_metadata && metadata.search_metadata.used_cross_encoder ? `<span class="text-purple-400">🎯 Re-ranked</span>` : ''}
+                    </div>
+                    ${qualityHtml}
+                    ${sourcesHtml}
                 </div>
             `;
         }
@@ -419,9 +508,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const chatId = await client.startChat(message, options);
                 if (!conversationId) conversationId = chatId;
             } else {
-                // Fallback to HTTP
-                showProgress('Processing request...', 10);
-                const response = await fetch('/ai/api/agents/tinyllama/chat/', {
+                // Fallback to enhanced HTTP endpoint
+                showProgress('Processing with enhanced RAG...', 10);
+                const response = await fetch('/ai/api/agents/tinyllama/enhanced_chat/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -433,6 +522,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         use_context: useContextCheckbox.checked,
                         max_tokens: parseInt(maxTokensInput.value, 10),
                         conversation_id: conversationId || null,
+                        style: responseStyleSelect.value,
+                        max_length: 'medium', // Could be made configurable
+                        temperature: 0.7, // Could be made configurable
+                        include_sources: includeSourcesCheckbox.checked,
+                        min_quality: parseFloat(qualityThresholdRange.value)
                     })
                 });
 
@@ -447,7 +541,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     conversationId = data.conversation_id;
                 }
 
-                addMessageToUI('assistant', data.response, data);
+                // Enhanced response with quality metrics and sources
+                addMessageToUI('assistant', data.response, {
+                    model_used: data.model_used,
+                    context_used: data.used_context,
+                    context_sources: data.sources ? data.sources.length : 0,
+                    response_time_ms: data.processing_time_ms,
+                    agent_type: data.agent_type,
+                    quality_scores: data.quality_scores,
+                    sources: data.sources,
+                    search_metadata: data.search_metadata
+                });
                 setUIState(false);
             }
         } catch (err) {
@@ -484,19 +588,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const changeAgentType = async (newType) => {
         currentAgentType = newType;
         try {
-            const response = await fetch('/ai/api/agents/tinyllama/change_agent_type/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
-                body: JSON.stringify({ agent_type: newType })
-            });
+            // Update UI immediately for responsiveness
+            const visual = agentVisuals[newType] || agentVisuals.general;
+            document.getElementById('agent-icon-header').innerHTML = visual.icon;
+            document.getElementById('agent-icon-header').className = visual.color;
+            document.getElementById('agent-type-header').textContent = newType.charAt(0).toUpperCase() + newType.slice(1).replace('_', ' ');
+            document.getElementById('agent-type-header').className = `font-medium capitalize ${visual.color}`;
             
-            if (response.ok) {
-                const visual = agentVisuals[newType] || agentVisuals.general;
-                document.getElementById('agent-icon-header').innerHTML = visual.icon;
-                document.getElementById('agent-icon-header').className = visual.color;
-                document.getElementById('agent-type-header').textContent = newType.charAt(0).toUpperCase() + newType.slice(1).replace('_', ' ');
-                document.getElementById('agent-type-header').className = `font-medium capitalize ${visual.color}`;
-            }
+            // No need to call server - we'll use the new type in the next message
+            console.log(`Agent type changed to: ${newType}`);
         } catch (err) {
             showError('Failed to change agent type.');
         }
@@ -508,6 +608,36 @@ document.addEventListener('DOMContentLoaded', function() {
         messageInput.style.height = Math.min(messageInput.scrollHeight, 128) + 'px';
     };
     
+    // Enhanced stats refresh function
+    const refreshStats = async () => {
+        try {
+            const response = await fetch('/ai/api/agents/tinyllama/enhanced_stats/', {
+                method: 'GET',
+                headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+            });
+            
+            if (response.ok) {
+                const stats = await response.json();
+                // Update header stats
+                const kbPagesHeader = document.getElementById('kb-pages-header');
+                if (kbPagesHeader) {
+                    kbPagesHeader.textContent = `${stats.pages_with_embeddings || 0} pages`;
+                }
+                
+                // Show notification
+                const oldConnectionText = connectionMode.textContent;
+                connectionMode.textContent = 'Stats refreshed!';
+                connectionMode.className = 'text-green-400';
+                setTimeout(() => {
+                    connectionMode.textContent = oldConnectionText;
+                    connectionMode.className = 'text-xs text-gray-500';
+                }, 2000);
+            }
+        } catch (err) {
+            showError('Failed to refresh stats');
+        }
+    };
+
     // Event Listeners
     chatForm.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -529,6 +659,18 @@ document.addEventListener('DOMContentLoaded', function() {
     clearBtn.addEventListener('click', clearChat);
     settingsBtn.addEventListener('click', () => settingsPanel.classList.toggle('hidden'));
     agentTypeSelect.addEventListener('change', (e) => changeAgentType(e.target.value));
+    
+    // Enhanced settings event listeners
+    qualityThresholdRange.addEventListener('input', (e) => {
+        const value = Math.round(e.target.value * 100);
+        qualityThresholdValue.textContent = `${value}%`;
+    });
+
+    refreshStatsBtn.addEventListener('click', refreshStats);
+
+    responseStyleSelect.addEventListener('change', (e) => {
+        console.log(`Response style changed to: ${e.target.value}`);
+    });
     
     websocketEnabledCheckbox.addEventListener('change', (e) => {
         websocketEnabled = e.target.checked;
