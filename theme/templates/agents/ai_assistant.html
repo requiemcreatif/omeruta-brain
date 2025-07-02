@@ -606,28 +606,36 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 // Fallback to enhanced HTTP endpoint
                 showProgress('Processing with enhanced RAG...', 10);
+                
+                // DEBUG: Log the request data
+                const requestData = {
+                    message: message,
+                    agent_type: currentAgentType,
+                    use_context: useContextCheckbox.checked,
+                    max_tokens: Math.max(parseInt(maxTokensInput.value, 10), 200),
+                    conversation_id: conversationId || null,
+                    style: responseStyleSelect.value || 'informative',
+                    max_length: 'medium',
+                    temperature: 0.7,
+                    include_sources: includeSourcesCheckbox.checked,
+                    min_quality: parseFloat(qualityThresholdRange.value)
+                };
+                console.log('🔍 Frontend Request Data:', requestData);
+                
                 const response = await fetch('/ai/api/agents/tinyllama/enhanced_chat/', {
                     method: 'POST',
                         headers: window.getAuthHeaders ? window.getAuthHeaders() : {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': '{{ csrf_token }}'
                     },
-                    body: JSON.stringify({
-                        message: message,
-                        agent_type: currentAgentType,
-                        use_context: useContextCheckbox.checked,
-                        max_tokens: parseInt(maxTokensInput.value, 10),
-                        conversation_id: conversationId || null,
-                        style: responseStyleSelect.value,
-                        max_length: 'medium', // Could be made configurable
-                        temperature: 0.7, // Could be made configurable
-                        include_sources: includeSourcesCheckbox.checked,
-                        min_quality: parseFloat(qualityThresholdRange.value)
-                    })
+                    body: JSON.stringify(requestData)
                 });
 
                 hideProgress();
                 const data = await response.json();
+                
+                // DEBUG: Log the response data  
+                console.log('📥 Frontend Response Data:', data);
 
                 if (!response.ok) {
                     throw new Error(data.error || 'Failed to get a response.');

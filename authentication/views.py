@@ -186,24 +186,31 @@ def user_logout(request):
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
-class CheckAuthStatusView(View):
-    """Check if user is authenticated and return user data - Plain Django view"""
+class CheckAuthStatusView(APIView):
+    """Check if user is authenticated and return user data - Supports both session and JWT auth"""
 
-    @method_decorator(csrf_exempt)
-    def dispatch(self, request, *args, **kwargs):
-        return super().dispatch(request, *args, **kwargs)
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if not request.user.is_authenticated:
-            return JsonResponse({"error": "Not authenticated"}, status=401)
+        """Return user authentication status and profile data"""
+        user = request.user
 
-        return JsonResponse(
+        return Response(
             {
                 "authenticated": True,
-                "user": UserProfileSerializer(request.user).data,
-                "is_admin": request.user.is_staff or request.user.is_superuser,
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "date_joined": user.date_joined.isoformat(),
+                    "is_active": user.is_active,
+                    "is_staff": user.is_staff,
+                    "is_superuser": user.is_superuser,
+                },
+                "is_admin": user.is_staff or user.is_superuser,
             },
-            status=200,
+            status=status.HTTP_200_OK,
         )
 
 

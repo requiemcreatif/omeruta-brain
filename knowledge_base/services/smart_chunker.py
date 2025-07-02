@@ -1,4 +1,6 @@
+import os
 import re
+import logging
 import nltk
 import numpy as np
 from typing import List, Dict, Tuple
@@ -17,8 +19,14 @@ class SmartSemanticChunker:
     """Intelligent semantic chunking that preserves context boundaries"""
 
     def __init__(self):
+        # Set Hugging Face token if available
+        hf_token = os.getenv("HUGGINGFACE_TOKEN") or os.getenv("HF_TOKEN")
+        if hf_token:
+            os.environ["HUGGINGFACE_HUB_TOKEN"] = hf_token
+
         self.embedding_model = SentenceTransformer(
-            settings.VECTOR_SETTINGS["EMBEDDING_MODEL"]
+            settings.VECTOR_SETTINGS["EMBEDDING_MODEL"],
+            use_auth_token=hf_token if hf_token else None,
         )
         self.max_chunk_size = settings.VECTOR_SETTINGS["CHUNK_SIZE"]
         self.overlap_size = settings.VECTOR_SETTINGS["CHUNK_OVERLAP"]

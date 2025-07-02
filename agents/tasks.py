@@ -4,6 +4,7 @@ from django.core.cache import cache
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from .services.tinyllama_agent import TinyLlamaAgent
+from .services.enhanced_tinyllama_agent import EnhancedTinyLlamaAgent
 from .services.enhanced_search_service import EnhancedVectorSearchService
 from .services.conversation_memory import ConversationMemory
 import time
@@ -59,8 +60,8 @@ def process_user_message_async(
             timeout=300,
         )
 
-        # Initialize agent with specified type
-        agent = TinyLlamaAgent(agent_type=agent_type)
+        # Initialize enhanced agent with specified type for better quality
+        agent = EnhancedTinyLlamaAgent(agent_type=agent_type)
 
         cache.set(
             f"task_status:{task_id}",
@@ -99,7 +100,13 @@ def process_user_message_async(
         start_time = time.time()
         try:
             result = agent.process_message(
-                message=enhanced_message, use_context=use_context, max_tokens=max_tokens
+                message=enhanced_message,
+                use_context=use_context,
+                response_config={
+                    "max_tokens": max_tokens,
+                    "temperature": 0.7,
+                    "style": "informative",
+                },
             )
             processing_time = time.time() - start_time
         except Exception as model_error:
@@ -162,6 +169,27 @@ def process_user_message_async(
                 },
             )
 
+        # Convert any numpy float32 values to regular Python floats for JSON serialization
+        def convert_numpy_types(obj):
+            """Recursively convert numpy types to Python native types"""
+            import numpy as np
+
+            if isinstance(obj, dict):
+                return {key: convert_numpy_types(value) for key, value in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_numpy_types(item) for item in obj]
+            elif isinstance(obj, np.floating):
+                return float(obj)
+            elif isinstance(obj, np.integer):
+                return int(obj)
+            elif hasattr(obj, "item"):  # numpy scalar
+                return obj.item()
+            else:
+                return obj
+
+        # Convert numpy types in the result
+        result = convert_numpy_types(result)
+
         # Add task metadata
         result.update(
             {
@@ -197,7 +225,7 @@ def process_user_message_async(
         try:
             from .models import AgentUsageLog
 
-            AgentUsageLog.objects.create(
+            AgentUsageLog.objects.create(  # pylint: disable=no-member
                 user=user,
                 question=message[:500],  # Truncate long questions
                 response_length=len(result.get("response", "")),
@@ -364,7 +392,9 @@ def auto_expand_knowledge_async(topic, max_urls=5):
         from crawler.models import CrawledPage
 
         # Search for existing content
-        existing_pages = CrawledPage.objects.filter(page_title__icontains=topic).count()
+        existing_pages = CrawledPage.objects.filter(  # pylint: disable=no-member
+            page_title__icontains=topic
+        ).count()
 
         result = {
             "topic": topic,
@@ -396,7 +426,7 @@ def analyze_content_quality_batch():
 
         # Get pages that haven't been quality assessed recently
         pages = (
-            CrawledPage.objects.filter(success=True)
+            CrawledPage.objects.filter(success=True)  # pylint: disable=no-member
             .exclude(clean_markdown__isnull=True)
             .exclude(clean_markdown="")[:50]
         )  # Process in batches of 50
@@ -441,7 +471,7 @@ def batch_process_unprocessed_pages():
 
         # Find unprocessed pages
         unprocessed_pages = (
-            CrawledPage.objects.filter(success=True)
+            CrawledPage.objects.filter(success=True)  # pylint: disable=no-member
             .exclude(clean_markdown__isnull=True)
             .exclude(clean_markdown="")[:20]
         )  # Process in smaller batches
@@ -474,7 +504,7 @@ def update_content_freshness():
 
         # Find pages older than 30 days
         cutoff_date = timezone.now() - timedelta(days=30)
-        stale_pages = CrawledPage.objects.filter(
+        stale_pages = CrawledPage.objects.filter(  # pylint: disable=no-member
             success=True, created_at__lt=cutoff_date
         )[
             :10
@@ -522,7 +552,7 @@ def health_check():
     """Health check task for monitoring"""
     try:
         # Check if AI services are available
-        agent = TinyLlamaAgent()
+        agent = EnhancedTinyLlamaAgent()
         is_available = agent.llm_service.is_available()
 
         return {

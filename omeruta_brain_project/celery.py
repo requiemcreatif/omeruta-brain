@@ -25,6 +25,7 @@ app.conf.update(
         "agents.tasks.*": {"queue": "ai_processing"},
         "agents.tasks.process_user_message_async": {"queue": "ai_high_priority"},
         "crawler.tasks.*": {"queue": "crawling"},
+        "knowledge_base.tasks.*": {"queue": "embeddings"},
     },
     # Task result settings
     result_expires=3600,  # Results expire after 1 hour
@@ -47,20 +48,10 @@ app.conf.update(
     worker_disable_rate_limits=True,
     # Beat schedule for periodic tasks
     beat_schedule={
-        # Clean up expired tasks every hour
-        "cleanup-expired-tasks": {
-            "task": "agents.tasks.cleanup_expired_tasks",
-            "schedule": 60.0 * 60.0,  # Every hour
-        },
         # Process unprocessed embeddings every 30 minutes
-        "process-embeddings": {
-            "task": "agents.tasks.batch_process_unprocessed_pages",
+        "batch-generate-embeddings": {
+            "task": "knowledge_base.tasks.batch_generate_embeddings",
             "schedule": 60.0 * 30.0,  # Every 30 minutes
-        },
-        # Check content freshness daily
-        "update-freshness": {
-            "task": "agents.tasks.update_content_freshness",
-            "schedule": 60.0 * 60.0 * 24.0,  # Daily
         },
     },
     # Error handling

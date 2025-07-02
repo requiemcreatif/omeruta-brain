@@ -11,6 +11,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.db import transaction
 from asgiref.sync import sync_to_async
+from .models import CrawlStatistics
 
 # Crawl4AI imports
 try:
@@ -24,13 +25,21 @@ except ImportError:
 
 from .models import CrawlJob, CrawledPage, CrawlStatistics
 
+# Import vectorization task for automatic processing
+try:
+    from knowledge_base.tasks import generate_embeddings_for_page
+
+    VECTORIZATION_AVAILABLE = True
+except ImportError:
+    VECTORIZATION_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
 class CrawlerService:
     """Main service for web crawling using Crawl4AI"""
 
-    def __init__(self):
+    def __init__(self, auto_vectorize: bool = True):
         if not CRAWL4AI_AVAILABLE:
             raise ImportError(
                 "Crawl4AI is not installed. Please install it with: pip install crawl4ai"
@@ -38,6 +47,7 @@ class CrawlerService:
 
         self.crawler = None
         self.browser_config = None
+        self.auto_vectorize = auto_vectorize and VECTORIZATION_AVAILABLE
         self.setup_browser_config()
 
     def setup_browser_config(self):
@@ -377,8 +387,12 @@ class CrawlerService:
 
             await save_pages_sync()
 
-            # Update job statistics
+            # Trigger automatic vectorization for successful pages
             successful_pages = [p for p in pages if p.success]
+            if self.auto_vectorize and successful_pages:
+                await self._trigger_vectorization(successful_pages)
+
+            # Update job statistics
             failed_pages = [p for p in pages if not p.success]
 
             crawl_job.successful_crawls = len(successful_pages)
@@ -401,7 +415,8 @@ class CrawlerService:
             # Create or update statistics
             @sync_to_async
             def create_stats_sync():
-                stats, created = CrawlStatistics.objects.get_or_create(
+
+                stats, created = getattr(CrawlStatistics, "objects").get_or_create(
                     crawl_job=crawl_job, defaults={"total_crawl_time": total_time}
                 )
                 if not created:
@@ -422,6 +437,34 @@ class CrawlerService:
                 f"Crawl job {crawl_job.id} completed in {total_time:.2f}s: "
                 f"{crawl_job.successful_crawls} successful, {crawl_job.failed_crawls} failed"
             )
+
+    async def _trigger_vectorization(self, successful_pages: List[CrawledPage]):
+        """Trigger automatic vectorization for successfully crawled pages"""
+
+        vectorization_count = 0
+
+        for page in successful_pages:
+            # Only vectorize pages with content that haven't been processed
+            if (
+                page.clean_markdown
+                and len(page.clean_markdown.strip()) > 100
+                and not page.is_processed_for_embeddings
+            ):
+
+                try:
+                    # Trigger async vectorization task
+                    generate_embeddings_for_page.delay(str(page.id))
+                    vectorization_count += 1
+                    logger.info(f"🧠 Triggered vectorization for page: {page.url}")
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to trigger vectorization for {page.url}: {e}"
+                    )
+
+        if vectorization_count > 0:
+            logger.info(f"✅ Triggered vectorization for {vectorization_count} pages")
+        else:
+            logger.info("ℹ️ No pages require vectorization")
 
 
 # Utility functions for content processing

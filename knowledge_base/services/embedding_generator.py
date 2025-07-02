@@ -1,11 +1,22 @@
 import logging
 from typing import List, Dict, Optional, Any
+
+# Force CPU-only processing BEFORE importing PyTorch-based libraries
+import os
+
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
+
 from django.db import transaction
 from django.conf import settings
 from crawler.models import CrawledPage
 from ..models import KnowledgeEmbedding
 from .smart_chunker import SmartSemanticChunker
 from .pgvector_search import PgVectorSearchService
+
+# Suppress linter warnings for Django model managers
+# pylint: disable=no-member
 
 logger = logging.getLogger(__name__)
 

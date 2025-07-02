@@ -6,7 +6,7 @@ from .services.enhanced_tinyllama_agent import EnhancedTinyLlamaAgent
 from .services.conversation_memory import ConversationMemory
 from knowledge_base.services.enhanced_rag import EnhancedRAGService
 from knowledge_base.services.pgvector_search import PgVectorSearchService
-from knowledge_base.tasks import generate_embeddings_for_page, batch_generate_embeddings
+from knowledge_base.tasks import batch_generate_embeddings
 from .tasks import (
     process_user_message_async,
     process_multiagent_query,
@@ -70,12 +70,28 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
 
     permission_classes = [permissions.IsAuthenticated]
 
+    # Class-level shared instances (singleton pattern)
+    _shared_agent = None
+    _shared_search_service = None
+    _shared_rag_service = None
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.agent = TinyLlamaAgent()
-        self.enhanced_agent = EnhancedTinyLlamaAgent()
-        self.search_service = PgVectorSearchService()
-        self.rag_service = EnhancedRAGService()
+
+        # Use shared instances to avoid reloading models
+        if TinyLlamaViewSet._shared_agent is None:
+            logger.info("🚀 Initializing shared AI models (first time)...")
+            TinyLlamaViewSet._shared_agent = EnhancedTinyLlamaAgent()
+            TinyLlamaViewSet._shared_search_service = PgVectorSearchService()
+            TinyLlamaViewSet._shared_rag_service = EnhancedRAGService()
+            logger.info("✅ Shared AI models initialized successfully")
+        else:
+            logger.info("♻️ Reusing existing AI models (no reload needed)")
+
+        self.agent = TinyLlamaViewSet._shared_agent
+        self.enhanced_agent = TinyLlamaViewSet._shared_agent  # Same instance
+        self.search_service = TinyLlamaViewSet._shared_search_service
+        self.rag_service = TinyLlamaViewSet._shared_rag_service
 
     @action(detail=False, methods=["post"])
     def chat(self, request):
@@ -106,9 +122,11 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
             else:
                 enhanced_message = message
 
-            # Process with agent
+            # Process with enhanced agent
             result = self.agent.process_message(
-                message=enhanced_message, use_context=use_context, max_tokens=max_tokens
+                message=enhanced_message,
+                use_context=use_context,
+                response_config={"max_tokens": max_tokens},
             )
 
             # Calculate response time
@@ -189,17 +207,57 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=["get"], url_path="status")
     def status(self, request):
         """Get agent and knowledge base status"""
-        stats = self.agent.get_available_knowledge_stats()
-        model_info = self.agent.llm_service.get_model_info()
+        try:
+            # Use cached model info if available to avoid triggering loads
+            if TinyLlamaViewSet._shared_agent is not None:
+                stats = self.agent.get_knowledge_stats()
+                model_info = self.agent.llm_service.get_model_info()
+            else:
+                # Return basic info without initializing models
+                stats = {
+                    "models_loaded": False,
+                    "message": "Models not yet initialized",
+                }
+                model_info = {"loaded": False, "name": "TinyLlama", "device": "cpu"}
 
-        return Response(
-            {
-                "knowledge_stats": stats,
-                "model_info": model_info,
-                "agent_type": self.agent.agent_type,
-                "available_agent_types": list(self.agent.system_prompts.keys()),
-            }
-        )
+            return Response(
+                {
+                    "knowledge_stats": stats,
+                    "model_info": model_info,
+                    "agent_type": (
+                        self.agent.agent_type
+                        if TinyLlamaViewSet._shared_agent
+                        else "general"
+                    ),
+                    "available_agent_types": [
+                        "general",
+                        "research",
+                        "qa",
+                        "content_analyzer",
+                        "live_research",
+                    ],
+                    "models_shared": TinyLlamaViewSet._shared_agent is not None,
+                }
+            )
+        except Exception as e:
+            logger.error(f"Error getting status: {e}")
+            return Response(
+                {
+                    "error": "Failed to get status",
+                    "knowledge_stats": {"error": str(e)},
+                    "model_info": {"loaded": False, "error": str(e)},
+                    "agent_type": "general",
+                    "available_agent_types": [
+                        "general",
+                        "research",
+                        "qa",
+                        "content_analyzer",
+                        "live_research",
+                    ],
+                    "models_shared": False,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @action(detail=False, methods=["post"], url_path="change_agent_type")
     def change_agent_type(self, request):
@@ -209,12 +267,38 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
                 {"error": "agent_type is required"}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Validate agent type
+        valid_agent_types = [
+            "general",
+            "research",
+            "qa",
+            "content_analyzer",
+            "live_research",
+        ]
+        if agent_type not in valid_agent_types:
+            return Response(
+                {"error": f"Invalid agent type. Must be one of: {valid_agent_types}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
-            self.agent.set_agent_type(agent_type)
+            # Simply change the agent type without reloading models
+            old_agent_type = self.agent.agent_type
+            self.agent.agent_type = agent_type
+
             # Update the session
             request.session["agent_type"] = agent_type
+
+            logger.info(
+                f"Agent type changed from {old_agent_type} to {agent_type} for user {request.user.id}"
+            )
+
             return Response(
-                {"message": f"Agent type changed to {agent_type}"},
+                {
+                    "message": f"Agent type changed to {agent_type}",
+                    "agent_type": agent_type,
+                    "system_prompt": self.agent.system_prompts.get(agent_type, ""),
+                },
                 status=status.HTTP_200_OK,
             )
         except ValueError as e:

@@ -2,6 +2,22 @@ import time
 import hashlib
 import numpy as np
 from typing import List, Dict, Any, Optional, Tuple
+
+# Force CPU-only processing BEFORE importing PyTorch-based libraries
+import os
+
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
+
+# Force PyTorch to use CPU
+import torch
+
+torch.set_default_device("cpu")
+if hasattr(torch.backends, "mps"):
+    torch.backends.mps.is_available = lambda: False
+    torch.backends.mps.is_built = lambda: False
+
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from django.db import connection
 from django.conf import settings
@@ -9,6 +25,9 @@ from django.core.cache import cache
 from ..models import KnowledgeEmbedding, QueryCache
 from crawler.models import CrawledPage
 import logging
+
+# Suppress linter warnings for Django model managers
+# pylint: disable=no-member
 
 logger = logging.getLogger(__name__)
 
@@ -25,17 +44,25 @@ class PgVectorSearchService:
     def _initialize_models(self):
         """Initialize embedding and cross-encoder models"""
         try:
-            # Initialize embedding model
+            # Set Hugging Face token if available
+            hf_token = os.getenv("HUGGINGFACE_TOKEN") or os.getenv("HF_TOKEN")
+            if hf_token:
+                os.environ["HUGGINGFACE_HUB_TOKEN"] = hf_token
+                logger.info("🔑 Using Hugging Face authentication token")
+
+            # Initialize embedding model with explicit CPU device
             self.embedding_model = SentenceTransformer(
                 self.config["EMBEDDING_MODEL"],
                 device="cpu",  # Use CPU to avoid GPU conflicts with TinyLlama
+                use_auth_token=hf_token if hf_token else None,
             )
             logger.info(f"✅ Embedding model loaded: {self.config['EMBEDDING_MODEL']}")
 
             # Initialize cross-encoder for re-ranking if enabled
             if self.config.get("USE_CROSS_ENCODER", False):
                 self.cross_encoder = CrossEncoder(
-                    self.config["CROSS_ENCODER_MODEL"], device="cpu"
+                    self.config["CROSS_ENCODER_MODEL"],
+                    device="cpu",
                 )
                 logger.info(
                     f"✅ Cross-encoder loaded: {self.config['CROSS_ENCODER_MODEL']}"
@@ -43,6 +70,14 @@ class PgVectorSearchService:
 
         except Exception as e:
             logger.error(f"❌ Failed to initialize search models: {e}")
+            # If rate limited, provide helpful message
+            if "429" in str(e) or "rate limit" in str(e).lower():
+                logger.warning(
+                    "🚨 Hugging Face rate limit detected. Consider adding HUGGINGFACE_TOKEN to environment variables."
+                )
+                logger.warning(
+                    "   Get a free token at: https://huggingface.co/settings/tokens"
+                )
             self.embedding_model = None
             self.cross_encoder = None
 

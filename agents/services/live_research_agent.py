@@ -9,7 +9,7 @@ from django.conf import settings
 from django.utils import timezone
 from asgiref.sync import sync_to_async
 
-from .tinyllama_agent import TinyLlamaAgent
+from .enhanced_tinyllama_agent import EnhancedTinyLlamaAgent
 from .enhanced_search_service import EnhancedVectorSearchService
 from .research_sources import research_sources
 from crawler.services import CrawlerService
@@ -20,7 +20,7 @@ from knowledge_base.services.pgvector_search import PgVectorSearchService
 logger = logging.getLogger(__name__)
 
 
-class LiveResearchAgent(TinyLlamaAgent):
+class LiveResearchAgent(EnhancedTinyLlamaAgent):
     """Enhanced Research Agent with live internet research capabilities"""
 
     def __init__(self):
@@ -384,10 +384,16 @@ Content: {source['content'][:800]}...
                 }
             else:
                 # Fallback to regular processing
-                return self.process_message(message, use_context=True, max_tokens=500)
+                return self.process_message(
+                    message=message,
+                    use_context=True,
+                    response_config={"max_tokens": 500},
+                )
         else:
             # Use regular research agent processing
-            return self.process_message(message, use_context=True, max_tokens=500)
+            return self.process_message(
+                message=message, use_context=True, response_config={"max_tokens": 500}
+            )
 
     def get_research_capabilities(self) -> Dict[str, Any]:
         """Get information about research capabilities"""

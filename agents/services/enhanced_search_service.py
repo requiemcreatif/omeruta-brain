@@ -1,3 +1,4 @@
+import os
 from sentence_transformers import SentenceTransformer
 from typing import List, Dict, Any
 import numpy as np
@@ -26,18 +27,40 @@ class EnhancedVectorSearchService:
     def _load_embedding_model(self):
         """Load local embedding model"""
         try:
+            # Set Hugging Face token if available
+            hf_token = os.getenv("HUGGINGFACE_TOKEN") or os.getenv("HF_TOKEN")
+            if hf_token:
+                os.environ["HUGGINGFACE_HUB_TOKEN"] = hf_token
+
             model_name = settings.VECTOR_SETTINGS["EMBEDDING_MODEL"]
 
             # Load with specific device configuration
-            self.embedding_model = SentenceTransformer(model_name, device=self.device)
+            self.embedding_model = SentenceTransformer(
+                model_name,
+                device=self.device,
+                use_auth_token=hf_token if hf_token else None,
+            )
 
             logger.info(f"✅ Embedding model {model_name} loaded on {self.device}")
         except Exception as e:
             logger.error(f"❌ Failed to load embedding model: {e}")
+            # If rate limited, provide helpful message
+            if "429" in str(e) or "rate limit" in str(e).lower():
+                logger.warning(
+                    "🚨 Hugging Face rate limit detected. Consider adding HUGGINGFACE_TOKEN to environment variables."
+                )
+                logger.warning(
+                    "   Get a free token at: https://huggingface.co/settings/tokens"
+                )
+
             # Fallback: try loading on CPU
             try:
                 model_name = settings.VECTOR_SETTINGS["EMBEDDING_MODEL"]
-                self.embedding_model = SentenceTransformer(model_name, device="cpu")
+                self.embedding_model = SentenceTransformer(
+                    model_name,
+                    device="cpu",
+                    use_auth_token=hf_token if hf_token else None,
+                )
                 self.device = "cpu"
                 logger.info(f"✅ Embedding model {model_name} loaded on CPU (fallback)")
             except Exception as fallback_error:
@@ -59,7 +82,7 @@ class EnhancedVectorSearchService:
             query_embedding = self.embedding_model.encode([query])[0]
 
             # Get relevant crawled pages
-            pages = CrawledPage.objects.filter(
+            pages = CrawledPage.objects.filter(  # pylint: disable=no-member
                 success=True, clean_markdown__isnull=False
             ).exclude(clean_markdown="")[
                 :100
