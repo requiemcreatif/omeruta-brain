@@ -1,19 +1,13 @@
-import asyncio
 import logging
 import time
-from typing import Dict, Any, List, Optional
-from urllib.parse import quote_plus
-import json
+from typing import Dict, Any, List
 
-from django.conf import settings
-from django.utils import timezone
 from asgiref.sync import sync_to_async
 
 from .enhanced_tinyllama_agent import EnhancedTinyLlamaAgent
-from .enhanced_search_service import EnhancedVectorSearchService
 from .research_sources import research_sources
 from crawler.services import CrawlerService
-from crawler.models import CrawlJob, CrawledPage
+from crawler.models import CrawlJob
 from knowledge_base.services.enhanced_rag import EnhancedRAGService
 from knowledge_base.services.pgvector_search import PgVectorSearchService
 
@@ -138,8 +132,13 @@ class LiveResearchAgent(EnhancedTinyLlamaAgent):
                     # Use sync_to_async to handle database operations
                     search_result = await sync_to_async(
                         self.search_service.enhanced_search
-                    )(research_topic, filters={"min_quality": 0.3}, use_cache=True)
+                    )(
+                        research_topic,
+                        filters={"min_quality": 0.4, "min_relevance": 0.5},
+                        use_cache=True,
+                    )
                     local_results = search_result.get("results", [])
+
                 except Exception as e:
                     logger.warning(f"Local KB search failed: {e}")
                     local_results = []
@@ -207,7 +206,7 @@ class LiveResearchAgent(EnhancedTinyLlamaAgent):
                 all_sources.append(
                     {
                         "title": result.get("page_title", "Local Knowledge"),
-                        "content": content,
+                        "content": content[:500],  # Further reduced to prevent timeout
                         "source_url": result.get("page_url", "Local KB"),
                         "source_type": "local_kb",
                         "relevance_score": 1.0
@@ -224,8 +223,8 @@ class LiveResearchAgent(EnhancedTinyLlamaAgent):
                         {
                             "title": page.title or "Web Source",
                             "content": page.clean_markdown[
-                                :2000
-                            ],  # Limit content length
+                                :600
+                            ],  # Further reduced to prevent timeout
                             "source_url": page.url,
                             "source_type": "live_web",
                             "relevance_score": 0.8,  # Assume high relevance since it was targeted
@@ -241,34 +240,60 @@ class LiveResearchAgent(EnhancedTinyLlamaAgent):
                 all_sources, research_topic
             )
 
-            research_prompt = f"""Based on the comprehensive research conducted on "{research_topic}", please provide a detailed analysis that includes:
+            # Filter out empty or irrelevant sources before creating context
+            relevant_sources = [
+                s
+                for s in all_sources
+                if s.get("content", "").strip()
+                and len(s.get("content", "").strip()) > 50
+            ]
 
-1. **Key Findings**: Main insights and discoveries
-2. **Current State**: What is the current status/situation
-3. **Trends & Developments**: Recent trends and emerging developments
-4. **Different Perspectives**: Various viewpoints if applicable
-5. **Implications**: What this means for the field/industry/society
-6. **Future Outlook**: Potential future developments
-7. **Research Gaps**: Areas needing further investigation
+            if not relevant_sources:
+                research_response = f"I was unable to find relevant information about '{research_topic}' in the available sources. The sources found were not relevant to your question."
+            else:
+                # Create focused context from relevant sources only
+                focused_context = self._compile_research_context(
+                    relevant_sources, research_topic
+                )
 
-Research Context:
-{research_context}
+                research_prompt = f"""You are answering this specific question: "{research_topic}"
 
-Please structure your response clearly and cite sources appropriately."""
+Based on the research sources below, provide a direct and factual answer. Do not describe what the sources contain - instead, extract the actual information to answer the question.
 
-            research_response = self.llm_service.generate_response(
-                prompt=research_prompt,
-                max_tokens=800,
-                system_prompt=self.system_prompts["research"],
-            )
+Research Sources:
+{focused_context[:2500]}
+
+Instructions:
+1. Answer the question directly using information from the sources
+2. If sources contain the answer, state it clearly
+3. If sources don't contain the answer, say so clearly
+4. Do not describe source contents - use the information within them
+5. Be factual and specific
+
+Answer the question now:"""
+
+                try:
+                    research_response = self.llm_service.generate_response(
+                        prompt=research_prompt,
+                        max_tokens=500,
+                        system_prompt="You are a factual research assistant. Always provide direct, clear answers to questions based on available sources. Do not hedge or avoid answering when sources contain relevant information.",
+                    )
+                except Exception as e:
+                    logger.error(f"Error generating response: {e}")
+                    research_response = None
 
             research_time = time.time() - research_start_time
             research_log.append(f"✅ Research completed in {research_time:.2f} seconds")
 
+            final_response = (
+                research_response
+                or f"I encountered an issue generating a response from the research data. Please try rephrasing your question or try again."
+            )
+
             return {
                 "status": "success",
                 "research_topic": research_topic,
-                "response": research_response,
+                "response": final_response,
                 "sources": all_sources,
                 "research_methodology": {
                     "search_queries_used": search_queries,
@@ -311,7 +336,7 @@ Source {i} ({source_type}):
 Title: {source['title']}
 URL: {source['source_url']}
 Relevance: {source['relevance_score']:.2f}
-Content: {source['content'][:800]}...
+Content: {source['content'][:400]}...
 """
             )
 

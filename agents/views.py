@@ -1,7 +1,6 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .services.tinyllama_agent import TinyLlamaAgent
 from .services.enhanced_tinyllama_agent import EnhancedTinyLlamaAgent
 from .services.conversation_memory import ConversationMemory
 from knowledge_base.services.enhanced_rag import EnhancedRAGService
@@ -13,6 +12,7 @@ from .tasks import (
     auto_expand_knowledge_async,
     analyze_content_quality_batch,
     health_check,
+    process_live_research_async,
 )
 from celery.result import AsyncResult
 from django.core.cache import cache
@@ -150,16 +150,17 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
 
             # Log usage for analytics (you can enhance this later)
             logger.info(
-                f"Chat request processed: user={request.user.id}, "
-                f"question_type={result.get('question_type')}, "
-                f"context_used={result.get('context_used')}, "
-                f"response_time={response_time_ms}ms"
+                "Chat request processed: user=%s, question_type=%s, context_used=%s, response_time=%sms",
+                request.user.id,
+                result.get("question_type"),
+                result.get("context_used"),
+                response_time_ms,
             )
 
             return Response(result)
 
         except Exception as e:
-            logger.error(f"Error in chat endpoint: {e}")
+            logger.error("Error in chat endpoint: %s", e)
             return Response(
                 {"error": "An unexpected error occurred", "details": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -240,7 +241,7 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
                 }
             )
         except Exception as e:
-            logger.error(f"Error getting status: {e}")
+            logger.error("Error getting status: %s", e)
             return Response(
                 {
                     "error": "Failed to get status",
@@ -290,7 +291,10 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
             request.session["agent_type"] = agent_type
 
             logger.info(
-                f"Agent type changed from {old_agent_type} to {agent_type} for user {request.user.id}"
+                "Agent type changed from % s to %s for user %s",
+                old_agent_type,
+                agent_type,
+                request.user.id,
             )
 
             return Response(
@@ -304,7 +308,7 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error(f"Error changing agent type: {e}")
+            logger.error("Error changing agent type: %s", e)
             return Response(
                 {"error": "An unexpected error occurred"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -390,7 +394,7 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
             )
 
         except Exception as e:
-            logger.error(f"Error checking task status: {e}")
+            logger.error("Error checking task status: %s", e)
             return Response(
                 {"error": "Failed to get task status", "details": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -545,7 +549,7 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
                 self.enhanced_agent.agent_type = config["agent_type"]
 
             # Handle conversation memory if conversation_id provided
-            conversation_history = None
+            # conversation_history = None
             if config["conversation_id"]:
                 memory = ConversationMemory(config["conversation_id"])
                 conversation_context = memory.get_conversation_context()
@@ -584,9 +588,9 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
             return Response(result, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Enhanced chat error: {e}")
+            logger.error("Enhanced chat error: %s", e)
             return Response(
-                {"error": f"Failed to process message: {str(e)}"},
+                {"error": "Failed to process message: %s" % str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -606,9 +610,9 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
             return Response(result, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Knowledge search error: {e}")
+            logger.error("Knowledge search error: %s", e)
             return Response(
-                {"error": f"Search failed: {str(e)}"},
+                {"error": "Search failed: %s" % str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -619,9 +623,9 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
             stats = self.enhanced_agent.get_knowledge_stats()
             return Response(stats, status=status.HTTP_200_OK)
         except Exception as e:
-            logger.error(f"Enhanced stats error: {e}")
+            logger.error("Enhanced stats error: %s", e)
             return Response(
-                {"error": f"Failed to get stats: {str(e)}"},
+                {"error": "Failed to get stats: %s" % str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -667,9 +671,9 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
                 return Response(result, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Embedding generation error: {e}")
+            logger.error("Embedding generation error: %s", e)
             return Response(
-                {"error": f"Failed to generate embeddings: {str(e)}"},
+                {"error": "Failed to generate embeddings: %s" % str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -691,9 +695,9 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
             return Response(context_info, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Get context error: {e}")
+            logger.error("Get context error: %s", e)
             return Response(
-                {"error": f"Failed to get context: {str(e)}"},
+                {"error": "Failed to get context: %s" % str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -754,7 +758,7 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
             return Response(result, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Live research error: {e}", exc_info=True)
+            logger.error("Live research error: %s", e, exc_info=True)
             return Response(
                 {
                     "error": "Live research failed",
@@ -774,7 +778,7 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
             return Response(capabilities, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Error getting research capabilities: {e}", exc_info=True)
+            logger.error("Error getting research capabilities: %s", e, exc_info=True)
             return Response(
                 {"error": "Failed to get research capabilities"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -864,7 +868,7 @@ class AsyncAgentViewSet(viewsets.GenericViewSet):
             )
 
         except Exception as e:
-            logger.error(f"Error checking task status: {e}")
+            logger.error("Error checking task status: %s", e)
             return Response(
                 {"error": "Failed to get task status", "details": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -921,5 +925,56 @@ class AsyncAgentViewSet(viewsets.GenericViewSet):
                 "check_status_url": f"/api/agents/async/status/{task.id}/",
                 "topic": topic,
                 "max_urls": max_urls,
+            }
+        )
+
+    @action(detail=False, methods=["post"], url_path="live_research_async")
+    def live_research_async(self, request):
+        """Start async live research processing with real-time status updates"""
+        research_topic = request.data.get("topic", "").strip()
+        max_sources = request.data.get("max_sources", 5)
+        include_local_kb = request.data.get("include_local_kb", True)
+        research_depth = request.data.get("research_depth", "comprehensive")
+        use_live_research = request.data.get("use_live_research", True)
+        conversation_id = request.data.get("conversation_id")
+
+        if not research_topic:
+            return Response(
+                {"error": "Research topic is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate research depth
+        if research_depth not in ["surface", "comprehensive", "deep"]:
+            research_depth = "comprehensive"
+
+        # Limit max sources to prevent excessive processing time
+        max_sources = min(max_sources, 10)
+
+        # Start async live research task
+        task = process_live_research_async.delay(
+            research_topic=research_topic,
+            user_id=request.user.id,
+            max_sources=max_sources,
+            include_local_kb=include_local_kb,
+            research_depth=research_depth,
+            use_live_research=use_live_research,
+            conversation_id=conversation_id,
+        )
+
+        return Response(
+            {
+                "task_id": task.id,
+                "status": "processing",
+                "message": "Live research started. Use the task_id to check status.",
+                "check_status_url": f"/api/agents/async/status/{task.id}/",
+                "research_topic": research_topic,
+                "conversation_id": conversation_id,
+                "config": {
+                    "max_sources": max_sources,
+                    "research_depth": research_depth,
+                    "use_live_research": use_live_research,
+                    "include_local_kb": include_local_kb,
+                },
             }
         )

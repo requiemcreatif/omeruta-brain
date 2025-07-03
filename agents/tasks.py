@@ -568,3 +568,237 @@ def health_check():
             "error": str(exc),
             "timestamp": timezone.now().isoformat(),
         }
+
+
+@shared_task(bind=True, max_retries=2, time_limit=900, soft_time_limit=720)
+def process_live_research_async(
+    self,
+    research_topic,
+    user_id,
+    max_sources=5,
+    include_local_kb=True,
+    research_depth="comprehensive",
+    use_live_research=True,
+    conversation_id=None,
+):
+    """Process live research asynchronously"""
+    task_id = self.request.id
+
+    try:
+        # Update task status
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "processing",
+                "progress": 0,
+                "message": "Initializing live research...",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "research_topic": research_topic,
+            },
+            timeout=300,
+        )
+
+        # Get user for logging
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            raise Exception(f"User {user_id} not found")
+
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "processing",
+                "progress": 15,
+                "message": "Loading research agent...",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "research_topic": research_topic,
+            },
+            timeout=300,
+        )
+
+        # Initialize live research agent
+        from .services.live_research_agent import LiveResearchAgent
+
+        agent = LiveResearchAgent()
+
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "processing",
+                "progress": 30,
+                "message": "Conducting live research...",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "research_topic": research_topic,
+            },
+            timeout=300,
+        )
+
+        # Process research with enhanced error handling
+        start_time = time.time()
+        try:
+            # Use asyncio to run the async research method
+            import asyncio
+
+            async def run_research():
+                return await agent.enhanced_research_chat(
+                    message=research_topic,
+                    use_live_research=use_live_research,
+                    max_sources=max_sources,
+                    research_depth=research_depth,
+                )
+
+            result = asyncio.run(run_research())
+            processing_time = time.time() - start_time
+
+        except Exception as research_error:
+            processing_time = time.time() - start_time
+            error_msg = str(research_error)
+
+            logger.error(f"Live research error for user {user_id}: {research_error}")
+
+            # Return error result instead of raising
+            result = {
+                "response": f"I encountered an issue while conducting live research on '{research_topic}'. {error_msg} Please try again with a different topic or use the regular chat mode.",
+                "error": True,
+                "error_type": "research_error",
+                "research_conducted": False,
+                "live_sources_used": 0,
+                "local_sources_used": 0,
+                "sources": [],
+                "research_methodology": {
+                    "research_time_seconds": processing_time,
+                    "error": error_msg,
+                },
+                "quality_metrics": {},
+                "research_log": [f"❌ Research failed: {error_msg}"],
+                "agent_type": "live_research",
+                "processing_time_ms": int(processing_time * 1000),
+            }
+
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "processing",
+                "progress": 90,
+                "message": "Finalizing research results...",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "research_topic": research_topic,
+            },
+            timeout=300,
+        )
+
+        # Convert any numpy float32 values to regular Python floats for JSON serialization
+        def convert_numpy_types(obj):
+            """Recursively convert numpy types to Python native types"""
+            import numpy as np
+
+            if isinstance(obj, dict):
+                return {key: convert_numpy_types(value) for key, value in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_numpy_types(item) for item in obj]
+            elif isinstance(obj, np.floating):
+                return float(obj)
+            elif isinstance(obj, np.integer):
+                return int(obj)
+            elif hasattr(obj, "item"):  # numpy scalar
+                return obj.item()
+            else:
+                return obj
+
+        # Convert numpy types in the result
+        result = convert_numpy_types(result)
+
+        # Add task metadata
+        result.update(
+            {
+                "task_id": task_id,
+                "processing_time": processing_time,
+                "processed_async": True,
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "research_topic": research_topic,
+                "timestamp": timezone.now().isoformat(),
+                "config_used": {
+                    "max_sources": max_sources,
+                    "include_local_kb": include_local_kb,
+                    "research_depth": research_depth,
+                    "use_live_research": use_live_research,
+                },
+            }
+        )
+
+        # Store result in cache
+        cache.set(f"ai_result:{task_id}", result, timeout=3600)
+
+        # Update final status
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "completed",
+                "progress": 100,
+                "message": "Live research completed",
+                "result_key": f"ai_result:{task_id}",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "research_topic": research_topic,
+                "processing_time": processing_time,
+                "live_sources_used": result.get("live_sources_used", 0),
+                "local_sources_used": result.get("local_sources_used", 0),
+            },
+            timeout=300,
+        )
+
+        # Log usage for analytics
+        try:
+            from .models import AgentUsageLog
+
+            AgentUsageLog.objects.create(  # pylint: disable=no-member
+                user=user,
+                question=research_topic[:500],  # Truncate long topics
+                response_length=len(result.get("response", "")),
+                context_used=result.get("research_conducted", False),
+                context_sources=result.get("live_sources_used", 0)
+                + result.get("local_sources_used", 0),
+                response_time_ms=int(processing_time * 1000),
+                question_type="live_research",
+                model_used="live_research_agent",
+                agent_type="live_research",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to log live research usage: {e}")
+
+        logger.info(
+            f"Live research completed for user {user_id} in {processing_time:.2f}s"
+        )
+        return result
+
+    except Exception as exc:
+        logger.error(f"Error processing live research: {exc}")
+
+        # Update error status
+        cache.set(
+            f"task_status:{task_id}",
+            {
+                "status": "failed",
+                "progress": 0,
+                "message": f"Live research failed: {str(exc)}",
+                "error": str(exc),
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "research_topic": research_topic,
+            },
+            timeout=300,
+        )
+
+        # Retry logic
+        if self.request.retries < self.max_retries:
+            logger.info(
+                f"Retrying live research task {task_id}, attempt {self.request.retries + 1}"
+            )
+            raise self.retry(countdown=120, exc=exc)
+
+        raise exc
