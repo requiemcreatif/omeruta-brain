@@ -681,6 +681,45 @@ class Phi3AgentViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    @action(detail=False, methods=["get"])
+    def vectorization_stats(self, request):
+        """Get vectorization statistics"""
+        try:
+            from knowledge_base.services.embedding_generator import (
+                EmbeddingGenerationService,
+            )
+            from crawler.models import CrawledPage
+
+            embedding_service = EmbeddingGenerationService()
+            stats = embedding_service.get_embedding_stats()
+
+            # Get unprocessed pages count
+            unprocessed_pages = (
+                CrawledPage.objects.filter(
+                    success=True,
+                    is_processed_for_embeddings=False,
+                    clean_markdown__isnull=False,
+                )
+                .exclude(clean_markdown="")
+                .count()
+            )
+
+            stats.update(
+                {
+                    "unprocessed_pages": unprocessed_pages,
+                    "can_vectorize": unprocessed_pages > 0,
+                }
+            )
+
+            return Response(stats, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error("Vectorization stats error: %s", e)
+            return Response(
+                {"error": "Failed to get vectorization stats: %s" % str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
     @action(detail=False, methods=["post"])
     def get_context(self, request):
         """Get context for a query without generating full response"""

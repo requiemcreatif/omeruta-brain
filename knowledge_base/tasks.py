@@ -65,7 +65,7 @@ def batch_generate_embeddings(
 
         # Update initial status
         cache.set(
-            f"batch_embedding_task:{self.request.id}",
+            f"task_status:{self.request.id}",
             {
                 "status": "processing",
                 "progress": 0,
@@ -74,12 +74,14 @@ def batch_generate_embeddings(
             timeout=3600,
         )
 
-        # Process pages
-        result = embedding_service.batch_process_pages(page_ids, force_regenerate)
+        # Process pages with progress updates
+        result = embedding_service.batch_process_pages(
+            page_ids, force_regenerate, task_id=self.request.id
+        )
 
         # Update final status
         cache.set(
-            f"batch_embedding_task:{self.request.id}",
+            f"task_status:{self.request.id}",
             {
                 "status": "completed",
                 "progress": 100,
@@ -95,7 +97,7 @@ def batch_generate_embeddings(
     except Exception as exc:
         logger.error(f"Batch embedding generation failed: {exc}")
         cache.set(
-            f"batch_embedding_task:{self.request.id}",
+            f"task_status:{self.request.id}",
             {"status": "failed", "progress": 0, "message": f"Error: {str(exc)}"},
             timeout=3600,
         )

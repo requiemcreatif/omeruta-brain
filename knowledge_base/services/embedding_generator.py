@@ -117,7 +117,10 @@ class EmbeddingGenerationService:
             return False
 
     def batch_process_pages(
-        self, page_ids: List[str] = None, force_regenerate: bool = False
+        self,
+        page_ids: List[str] = None,
+        force_regenerate: bool = False,
+        task_id: str = None,
     ) -> Dict[str, Any]:
         """Process multiple pages in batch"""
 
@@ -141,7 +144,25 @@ class EmbeddingGenerationService:
             "details": [],
         }
 
-        for page in pages:
+        total_pages = results["total_pages"]
+        for i, page in enumerate(pages):
+            # Update progress if task_id is provided
+            if task_id:
+                from django.core.cache import cache
+
+                progress = (
+                    int((i / total_pages) * 80) + 10 if total_pages > 0 else 50
+                )  # 10-90% range
+                cache.set(
+                    f"task_status:{task_id}",
+                    {
+                        "status": "processing",
+                        "progress": progress,
+                        "message": f"Processing page {i+1}/{total_pages}: {page.title[:50]}...",
+                    },
+                    timeout=3600,
+                )
+
             result = self.process_page(page, force_regenerate)
 
             if result["status"] == "success":

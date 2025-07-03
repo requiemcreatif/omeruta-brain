@@ -33,6 +33,7 @@ app.conf.update(
         "agents.tasks.process_user_message_async": {"queue": "ai_high_priority"},
         "agents.tasks.process_multiagent_query": {"queue": "ai_processing"},
         "agents.tasks.process_live_research_async": {"queue": "ai_processing"},
+        "knowledge_base.tasks.generate_embeddings_for_page": {"queue": "embeddings"},
         "knowledge_base.tasks.batch_generate_embeddings": {"queue": "embeddings"},
         "crawler.tasks.*": {"queue": "crawling"},
     },
