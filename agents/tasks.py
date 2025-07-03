@@ -3,7 +3,7 @@ from celery.utils.log import get_task_logger
 from django.core.cache import cache
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from .services.tinyllama_agent import TinyLlamaAgent
+
 from .services.enhanced_phi3_agent import EnhancedPhi3Agent
 from .services.enhanced_search_service import EnhancedVectorSearchService
 from .services.conversation_memory import ConversationMemory
@@ -138,9 +138,7 @@ def process_user_message_async(
                 "response": f"I apologize, but I encountered a technical issue while processing your request. {error_msg} Please try again.",
                 "error": True,
                 "error_type": "model_error",
-                "model_used": agent.llm_service.get_model_info().get(
-                    "name", "TinyLlama"
-                ),
+                "model_used": agent.llm_service.get_model_info().get("name", "Phi3"),
                 "context_used": False,
                 "context_sources": 0,
                 "question_type": "error",
@@ -237,7 +235,7 @@ def process_user_message_async(
                 context_sources=result.get("context_sources", 0),
                 response_time_ms=int(processing_time * 1000),
                 question_type=result.get("question_type", "general"),
-                model_used=result.get("model_used", "tinyllama"),
+                model_used=result.get("model_used", "phi3"),
                 agent_type=agent_type,
             )
         except Exception as e:

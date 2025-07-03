@@ -385,7 +385,7 @@ Content: {source['content'][:400]}...
             if research_result["status"] == "success":
                 return {
                     "response": research_result["response"],
-                    "model_used": "tinyllama",
+                    "model_used": "phi3",
                     "research_conducted": True,
                     "live_sources_used": len(
                         [

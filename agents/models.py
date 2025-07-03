@@ -23,7 +23,7 @@ class AgentUsageLog(models.Model):
         help_text="Type of question (factual, analytical, procedural, opinion)",
     )
     model_used = models.CharField(
-        max_length=50, default="tinyllama", help_text="AI model used for response"
+        max_length=50, default="phi3", help_text="AI model used for response"
     )
     agent_type = models.CharField(
         max_length=50,

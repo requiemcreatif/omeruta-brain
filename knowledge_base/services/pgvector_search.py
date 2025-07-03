@@ -53,7 +53,7 @@ class PgVectorSearchService:
             # Initialize embedding model with explicit CPU device
             self.embedding_model = SentenceTransformer(
                 self.config["EMBEDDING_MODEL"],
-                device="cpu",  # Use CPU to avoid GPU conflicts with TinyLlama
+                device="cpu",  # Use CPU to avoid GPU conflicts with main model
                 use_auth_token=hf_token if hf_token else None,
             )
             logger.info(f"✅ Embedding model loaded: {self.config['EMBEDDING_MODEL']}")

@@ -375,7 +375,7 @@ class Phi3ModelService:
         return {
             "max_context_tokens": 128000,  # 128K context window
             "effective_context": "120K tokens",  # Leave room for generation
-            "context_advantage": "16x larger than original TinyLlama",
+            "context_advantage": "128K context window for comprehensive analysis",
             "rag_benefit": "Can process much longer retrieved documents",
             "multi_turn_benefit": "Maintains longer conversation history",
         }

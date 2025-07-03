@@ -47,10 +47,11 @@ class EnhancedPhi3Agent:
             
 CRITICAL INSTRUCTIONS:
 - Answer ONLY based on the provided context below
+- If the context contains relevant information, use it to answer the question directly
 - If the context is empty or insufficient, clearly state that you don't have enough information
-- Never speculate about future events or make predictions
-- If asked about future dates (like 2026), explain that you can only provide information from your knowledge base
-- Be honest about the limitations of your knowledge
+- When the context contains factual information (including dates, names, events), provide that information as your answer
+- Only refuse to answer if the context is truly empty or doesn't contain relevant information
+- Be honest about the limitations of your knowledge when context is insufficient
 - With your 128K context window, you can process much longer retrieved documents for comprehensive answers""",
             "research": """You are a research assistant powered by Phi-3 with 128K context capability. Analyze the provided context thoroughly and provide comprehensive explanations based only on the available information. Your extended context window allows for deeper analysis of longer documents.""",
             "qa": """You are a Q&A specialist powered by Phi-3. Provide direct, accurate answers based strictly on the provided context. If the context doesn't contain the answer, say so clearly. Your 128K context window enables processing of extensive source material.""",
@@ -78,7 +79,14 @@ CRITICAL INSTRUCTIONS:
                     "model_unavailable",
                 )
 
-            # Step 2: Direct context retrieval if enabled
+            # Step 2: Analyze question type and determine response characteristics
+            question_analysis = self._classify_question_type(message)
+
+            # Override max_tokens from question analysis if not explicitly set
+            if "max_tokens" not in response_config:
+                response_config["max_tokens"] = question_analysis["max_tokens"]
+
+            # Step 3: Direct context retrieval if enabled
             context_info = None
             sources = []
 
@@ -90,10 +98,10 @@ CRITICAL INSTRUCTIONS:
                     logger.warning("Context retrieval failed: %s", e)
                     context_info = None
 
-            # Step 3: Prepare prompt
+            # Step 4: Prepare prompt with intelligent response instructions
             if context_info and context_info.get("context"):
-                prompt = self._create_prompt_with_context(
-                    message, context_info["context"]
+                prompt = self._create_adaptive_prompt_with_context(
+                    message, context_info["context"], question_analysis
                 )
                 used_context = True
             else:
@@ -110,21 +118,26 @@ USER QUESTION: {message}
 RESPONSE: I don't have any relevant information in my knowledge base to answer your question about "{message}". My knowledge base appears to be limited and doesn't contain information on this topic."""
                 used_context = False
 
-            # Step 4: Generate response with optimization
+            # Step 5: Generate response with optimization
             if self.use_mlx:
                 # Use MLX for Apple Silicon optimization
-                response = self.llm_service.generate_response(
-                    prompt=message,  # MLX service handles system prompts differently
-                    max_tokens=response_config.get("max_tokens", 500),
-                    temperature=response_config.get("temperature", 0.7),
-                    system_prompt=(
-                        self.system_prompts.get(
+                if used_context:
+                    # When context is available, use the full prompt with context
+                    response = self.llm_service.generate_response(
+                        prompt=prompt,  # Full prompt with context
+                        max_tokens=response_config.get("max_tokens", 500),
+                        temperature=response_config.get("temperature", 0.7),
+                    )
+                else:
+                    # When no context, use system prompt + message
+                    response = self.llm_service.generate_response(
+                        prompt=message,
+                        max_tokens=response_config.get("max_tokens", 500),
+                        temperature=response_config.get("temperature", 0.7),
+                        system_prompt=self.system_prompts.get(
                             self.agent_type, self.system_prompts["general"]
-                        )
-                        if not used_context
-                        else None
-                    ),
-                )
+                        ),
+                    )
             else:
                 # Use CPU implementation
                 response = self.llm_service.generate_response(
@@ -159,6 +172,8 @@ RESPONSE: I don't have any relevant information in my knowledge base to answer y
                 "optimization": optimization,
                 "framework": "MLX" if self.use_mlx else "Transformers",
                 "device": model_info.get("device", "unknown"),
+                "question_analysis": question_analysis,
+                "adaptive_response": True,
             }
 
         except Exception as e:
@@ -245,6 +260,29 @@ CONTEXT FROM KNOWLEDGE BASE:
 
 USER QUESTION: {message}
 
+RESPONSE: Based on the information provided in the knowledge base above, """
+
+    def _create_adaptive_prompt_with_context(
+        self, message: str, context: str, question_analysis: Dict[str, Any]
+    ) -> str:
+        """Create an adaptive prompt that adjusts response style based on question type"""
+        system_prompt = self.system_prompts.get(
+            self.agent_type, self.system_prompts["general"]
+        )
+
+        response_instructions = self._get_response_instructions(question_analysis)
+
+        return f"""{system_prompt}
+
+CONTEXT FROM KNOWLEDGE BASE:
+{context}
+
+USER QUESTION: {message}
+
+RESPONSE INSTRUCTIONS: {response_instructions}
+
+IMPORTANT: Provide ONE complete answer only. Do not repeat yourself or generate multiple responses.
+
 RESPONSE:"""
 
     def _evaluate_response(
@@ -325,6 +363,157 @@ RESPONSE:"""
                 "optimization": "none",
             }
 
+    def _classify_question_type(self, message: str) -> Dict[str, Any]:
+        """Classify question type and determine appropriate response characteristics"""
+        message_lower = message.lower().strip()
 
-# Backward compatibility alias
-EnhancedTinyLlamaAgent = EnhancedPhi3Agent
+        # Question type classification
+        question_type = "general"
+        response_style = "balanced"
+        max_tokens = 300
+
+        # Simple factual questions - short, direct answers
+        simple_factual = [
+            "who is",
+            "who was",
+            "what is",
+            "what was",
+            "when is",
+            "when was",
+            "where is",
+            "where was",
+            "which is",
+            "which was",
+        ]
+        if any(pattern in message_lower for pattern in simple_factual):
+            question_type = "simple_factual"
+            response_style = "concise"
+            max_tokens = 250  # Increased to ensure complete responses
+
+        # Complex analytical questions - longer, detailed answers
+        analytical_patterns = [
+            "analyze",
+            "compare",
+            "evaluate",
+            "explain how",
+            "explain why",
+            "pros and cons",
+            "advantages and disadvantages",
+            "impact of",
+            "relationship between",
+            "differences between",
+        ]
+        if any(pattern in message_lower for pattern in analytical_patterns):
+            question_type = "analytical"
+            response_style = "comprehensive"
+            max_tokens = 500
+
+        # Procedural questions - step-by-step answers
+        procedural_patterns = [
+            "how to",
+            "steps to",
+            "process of",
+            "procedure for",
+            "guide to",
+            "tutorial",
+            "instructions",
+        ]
+        if any(pattern in message_lower for pattern in procedural_patterns):
+            question_type = "procedural"
+            response_style = "structured"
+            max_tokens = 400
+
+        # List-based questions - organized answers
+        list_patterns = [
+            "list of",
+            "examples of",
+            "types of",
+            "kinds of",
+            "what are the",
+            "name some",
+            "give me",
+        ]
+        if any(pattern in message_lower for pattern in list_patterns):
+            question_type = "list_based"
+            response_style = "organized"
+            max_tokens = 350
+
+        # Definition questions - brief but complete
+        definition_patterns = [
+            "define",
+            "definition of",
+            "meaning of",
+            "what does",
+            "what means",
+        ]
+        if any(pattern in message_lower for pattern in definition_patterns):
+            question_type = "definition"
+            response_style = "precise"
+            max_tokens = 200
+
+        return {
+            "type": question_type,
+            "style": response_style,
+            "max_tokens": max_tokens,
+            "complexity": self._assess_complexity(message),
+        }
+
+    def _assess_complexity(self, message: str) -> str:
+        """Assess question complexity based on length and keywords"""
+        word_count = len(message.split())
+
+        complex_indicators = [
+            "comprehensive",
+            "detailed",
+            "thorough",
+            "in-depth",
+            "elaborate",
+            "extensive",
+            "complete analysis",
+        ]
+
+        simple_indicators = ["briefly", "quick", "short", "simple", "just", "only"]
+
+        if any(indicator in message.lower() for indicator in complex_indicators):
+            return "high"
+        elif any(indicator in message.lower() for indicator in simple_indicators):
+            return "low"
+        elif word_count > 15:
+            return "high"
+        elif word_count < 5:
+            return "low"
+        else:
+            return "medium"
+
+    def _get_response_instructions(self, question_analysis: Dict[str, Any]) -> str:
+        """Generate response instructions based on question analysis"""
+        style = question_analysis["style"]
+        question_type = question_analysis["type"]
+        complexity = question_analysis["complexity"]
+
+        instructions = {
+            "concise": "Provide a complete, informative answer using clear sentences. Be direct but ensure you fully answer the question.",
+            "comprehensive": "Provide a detailed, thorough analysis. Include multiple perspectives and implications.",
+            "structured": "Organize your response in clear steps or sections. Use numbering or bullets if helpful.",
+            "organized": "Present information in a well-organized format. Group related items together.",
+            "precise": "Give a clear, accurate definition or explanation. Be specific and avoid ambiguity.",
+            "balanced": "Provide a complete but appropriately sized response based on the question's needs.",
+        }
+
+        base_instruction = instructions.get(style, instructions["balanced"])
+
+        # Add complexity-based modifiers
+        if complexity == "low":
+            base_instruction += " Keep it simple and to the point."
+        elif complexity == "high":
+            base_instruction += " Provide comprehensive detail and context."
+
+        # Add question-type specific guidance
+        if question_type == "simple_factual":
+            base_instruction += " Provide the key facts in complete, well-formed sentences. Ensure your answer is informative and complete."
+        elif question_type == "definition":
+            base_instruction += (
+                " Start with a clear definition, then add brief context if relevant."
+            )
+
+        return base_instruction

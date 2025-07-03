@@ -205,7 +205,7 @@ class MLXPhi3Service:
 
             start_time = time.time()
 
-            # Create sampler with MLX-LM API
+            # Create sampler with MLX-LM API (only supported parameters)
             sampler = make_sampler(
                 temp=temperature,
                 top_p=top_p,
@@ -244,6 +244,9 @@ class MLXPhi3Service:
 
             # Clean up the response
             if response:
+                # Log raw response for debugging
+                logger.debug(f"Raw response: {repr(response[:200])}")
+
                 # Remove any remaining special tokens and the original prompt
                 response = response.replace("<|end|>", "").strip()
 
@@ -251,10 +254,23 @@ class MLXPhi3Service:
                 if full_prompt in response:
                     response = response.replace(full_prompt, "").strip()
 
-                logger.debug(f"✅ Response generated in {generation_time:.2f}s")
-                logger.debug(f"   Response length: {len(response)} chars")
+                # Clean up repetitive assistant tokens and patterns
+                cleaned_response = self._clean_response(response)
 
-                return response
+                logger.debug(f"✅ Response generated in {generation_time:.2f}s")
+                logger.debug(f"   Original length: {len(response)} chars")
+                logger.debug(f"   Cleaned length: {len(cleaned_response)} chars")
+                logger.debug(f"   Final response: {repr(cleaned_response[:100])}")
+
+                # Ensure we have a meaningful response
+                if len(cleaned_response.strip()) < 5:
+                    logger.warning(
+                        f"Response too short after cleaning: {repr(cleaned_response)}"
+                    )
+                    # Return original if cleaning made it too short
+                    return response if len(response.strip()) >= 5 else None
+
+                return cleaned_response
             else:
                 logger.warning("Empty response generated")
                 return None
@@ -262,6 +278,204 @@ class MLXPhi3Service:
         except Exception as e:
             logger.error(f"❌ Generation failed: {e}")
             return None
+
+    def _clean_response(self, response: str) -> str:
+        """Clean up MLX response to remove repetitive patterns and tokens"""
+        if not response:
+            return response
+
+        # Remove special tokens
+        response = (
+            response.replace("<|assistant|>", "")
+            .replace("<|user|>", "")
+            .replace("<|system|>", "")
+        )
+        response = response.replace("<|end|>", "").strip()
+
+        # Split by assistant tokens and take only the first complete response
+        parts = response.split("<|assistant|>")
+        if len(parts) > 1:
+            # Take the first non-empty part
+            for part in parts:
+                cleaned_part = part.strip()
+                if (
+                    cleaned_part and len(cleaned_part) > 3
+                ):  # Minimum meaningful length (reduced)
+                    response = cleaned_part
+                    break
+
+        # Advanced repetition removal - handle semantic duplicates
+        response = self._remove_semantic_repetitions(response)
+
+        # Ensure proper ending
+        if response and not response.endswith((".", "!", "?")):
+            response += "."
+
+        return response.strip()
+
+    def _remove_semantic_repetitions(self, text: str) -> str:
+        """Remove semantically similar repetitive sentences"""
+        if not text:
+            return text
+
+        # For very short responses, be less aggressive
+        if len(text) < 50:
+            # Just remove exact duplicates for short responses
+            return self._remove_exact_duplicates(text)
+
+        # Split into sentences more carefully
+        import re
+
+        # Split by sentence endings but preserve them
+        sentences = re.split(r"([.!?]+)", text)
+
+        # Reconstruct sentences with their punctuation
+        full_sentences = []
+        for i in range(0, len(sentences) - 1, 2):
+            sentence = sentences[i].strip()
+            punctuation = sentences[i + 1] if i + 1 < len(sentences) else ""
+            if sentence:
+                full_sentences.append(sentence + punctuation)
+
+        # If we have a final sentence without punctuation
+        if len(sentences) % 2 == 1 and sentences[-1].strip():
+            full_sentences.append(sentences[-1].strip())
+
+        # Remove exact duplicates and very similar sentences
+        unique_sentences = []
+        seen_content = set()
+
+        for sentence in full_sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+
+            # Create a normalized version for comparison
+            normalized = self._normalize_sentence(sentence)
+
+            # Check if this is a meaningful sentence (not just punctuation)
+            if len(normalized) < 3:  # Reduced threshold
+                continue
+
+            # Check for exact matches and very similar content
+            is_duplicate = False
+            for seen in seen_content:
+                if self._sentences_too_similar(normalized, seen):
+                    is_duplicate = True
+                    break
+
+            if not is_duplicate:
+                unique_sentences.append(sentence)
+                seen_content.add(normalized)
+
+        # Join sentences back together
+        result = " ".join(unique_sentences)
+
+        # Clean up extra spaces
+        result = re.sub(r"\s+", " ", result).strip()
+
+        return result
+
+    def _remove_exact_duplicates(self, text: str) -> str:
+        """Remove only exact duplicate sentences for short responses"""
+        import re
+
+        # Split by sentence endings but preserve them
+        sentences = re.split(r"([.!?]+)", text)
+
+        # Reconstruct sentences with their punctuation
+        full_sentences = []
+        for i in range(0, len(sentences) - 1, 2):
+            sentence = sentences[i].strip()
+            punctuation = sentences[i + 1] if i + 1 < len(sentences) else ""
+            if sentence:
+                full_sentences.append(sentence + punctuation)
+
+        # If we have a final sentence without punctuation
+        if len(sentences) % 2 == 1 and sentences[-1].strip():
+            full_sentences.append(sentences[-1].strip())
+
+        # Remove only exact duplicates
+        unique_sentences = []
+        seen_exact = set()
+
+        for sentence in full_sentences:
+            sentence_clean = sentence.strip()
+            if sentence_clean and sentence_clean.lower() not in seen_exact:
+                unique_sentences.append(sentence)
+                seen_exact.add(sentence_clean.lower())
+
+        result = " ".join(unique_sentences)
+        return re.sub(r"\s+", " ", result).strip()
+
+    def _normalize_sentence(self, sentence: str) -> str:
+        """Normalize sentence for comparison"""
+        import re
+
+        # Remove punctuation and convert to lowercase
+        normalized = re.sub(r"[^\w\s]", "", sentence.lower())
+
+        # Remove extra whitespace
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+
+        return normalized
+
+    def _sentences_too_similar(
+        self, sent1: str, sent2: str, threshold: float = 0.6
+    ) -> bool:
+        """Check if two sentences are too similar using simple word overlap"""
+        if not sent1 or not sent2:
+            return False
+
+        # Exact match
+        if sent1 == sent2:
+            return True
+
+        # Check for key phrase repetition (common in factual statements)
+        # Extract key phrases (3+ consecutive words)
+        import re
+
+        words1 = sent1.split()
+        words2 = sent2.split()
+
+        # Check for overlapping 3-word phrases
+        if len(words1) >= 3 and len(words2) >= 3:
+            phrases1 = set()
+            phrases2 = set()
+
+            for i in range(len(words1) - 2):
+                phrase = " ".join(words1[i : i + 3]).lower()
+                phrases1.add(phrase)
+
+            for i in range(len(words2) - 2):
+                phrase = " ".join(words2[i : i + 3]).lower()
+                phrases2.add(phrase)
+
+            # If they share significant phrase overlap, they're likely repetitive
+            if phrases1 and phrases2:
+                phrase_overlap = len(phrases1.intersection(phrases2))
+                phrase_union = len(phrases1.union(phrases2))
+                phrase_similarity = (
+                    phrase_overlap / phrase_union if phrase_union > 0 else 0
+                )
+
+                if phrase_similarity >= 0.5:  # 50% phrase overlap indicates repetition
+                    return True
+
+        # Word-based similarity
+        words1_set = set(word.lower() for word in words1)
+        words2_set = set(word.lower() for word in words2)
+
+        if not words1_set or not words2_set:
+            return False
+
+        # Calculate Jaccard similarity
+        intersection = len(words1_set.intersection(words2_set))
+        union = len(words1_set.union(words2_set))
+
+        similarity = intersection / union if union > 0 else 0
+
+        return similarity >= threshold
 
     def is_available(self) -> bool:
         """Check if the model is loaded and ready"""

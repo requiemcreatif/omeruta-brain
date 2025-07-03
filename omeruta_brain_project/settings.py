@@ -285,7 +285,7 @@ AI_MODELS = {
             "temperature": 0.7,
         }
     },
-    "DEFAULT_LOCAL_MODEL": "phi3",  # Changed from tinyllama to phi3
+    "DEFAULT_LOCAL_MODEL": "phi3",  # Primary model for all operations
     "DEFAULT_API_MODEL": "gpt-3.5-turbo",
     "PREFER_LOCAL_FOR_SIMPLE": True,
     "AUTO_FALLBACK": True,
