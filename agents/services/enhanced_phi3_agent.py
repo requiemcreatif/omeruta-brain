@@ -118,33 +118,59 @@ USER QUESTION: {message}
 RESPONSE: I don't have any relevant information in my knowledge base to answer your question about "{message}". My knowledge base appears to be limited and doesn't contain information on this topic."""
                 used_context = False
 
-            # Step 5: Generate response with optimization
-            if self.use_mlx:
-                # Use MLX for Apple Silicon optimization
-                if used_context:
-                    # When context is available, use the full prompt with context
-                    response = self.llm_service.generate_response(
-                        prompt=prompt,  # Full prompt with context
-                        max_tokens=response_config.get("max_tokens", 500),
-                        temperature=response_config.get("temperature", 0.7),
-                    )
+            # Step 5: Generate response with optimization and quality validation
+            max_attempts = 2
+            for attempt in range(max_attempts):
+                if self.use_mlx:
+                    # Use MLX for Apple Silicon optimization
+                    if used_context:
+                        # When context is available, use the full prompt with context
+                        response = self.llm_service.generate_response(
+                            prompt=prompt,  # Full prompt with context
+                            max_tokens=response_config.get("max_tokens", 500),
+                            temperature=response_config.get(
+                                "temperature", 0.3
+                            ),  # Lower temp for more focused responses
+                        )
+                    else:
+                        # When no context, use system prompt + message
+                        response = self.llm_service.generate_response(
+                            prompt=message,
+                            max_tokens=response_config.get("max_tokens", 500),
+                            temperature=response_config.get("temperature", 0.3),
+                            system_prompt=self.system_prompts.get(
+                                self.agent_type, self.system_prompts["general"]
+                            ),
+                        )
                 else:
-                    # When no context, use system prompt + message
+                    # Use CPU implementation
                     response = self.llm_service.generate_response(
-                        prompt=message,
+                        prompt=prompt,
                         max_tokens=response_config.get("max_tokens", 500),
-                        temperature=response_config.get("temperature", 0.7),
-                        system_prompt=self.system_prompts.get(
-                            self.agent_type, self.system_prompts["general"]
-                        ),
+                        temperature=response_config.get("temperature", 0.3),
                     )
-            else:
-                # Use CPU implementation
-                response = self.llm_service.generate_response(
-                    prompt=prompt,
-                    max_tokens=response_config.get("max_tokens", 500),
-                    temperature=response_config.get("temperature", 0.7),
-                )
+
+                # Clean and validate response
+                if response:
+                    response = self._clean_and_validate_response(response, used_context)
+
+                    # Check if response is good quality or if we should retry
+                    if (
+                        not self._is_poor_quality_response(response)
+                        or attempt == max_attempts - 1
+                    ):
+                        break
+                    else:
+                        logger.warning(
+                            f"Poor quality response detected on attempt {attempt + 1}, retrying..."
+                        )
+                        # Adjust parameters for retry
+                        response_config["temperature"] = min(
+                            response_config.get("temperature", 0.3) + 0.1, 0.7
+                        )
+                        response_config["max_tokens"] = min(
+                            response_config.get("max_tokens", 500) + 20, 600
+                        )
 
             processing_time = (time.time() - start_time) * 1000
 
@@ -274,6 +300,12 @@ RESPONSE: Based on the information provided in the knowledge base above, """
 
         return f"""{system_prompt}
 
+IMPORTANT RULES:
+1. Base your answer primarily on the provided context information
+2. If the context contains the answer, state it clearly and confidently
+3. Do not repeat yourself or provide uncertain/apologetic responses
+4. Be direct and informative
+
 CONTEXT FROM KNOWLEDGE BASE:
 {context}
 
@@ -281,9 +313,7 @@ USER QUESTION: {message}
 
 RESPONSE INSTRUCTIONS: {response_instructions}
 
-IMPORTANT: Provide ONE complete answer only. Do not repeat yourself or generate multiple responses.
-
-RESPONSE:"""
+Based on the provided information, """
 
     def _evaluate_response(
         self, question: str, response: str, context: str
@@ -517,3 +547,113 @@ RESPONSE:"""
             )
 
         return base_instruction
+
+    def _clean_and_validate_response(self, response: str, used_context: bool) -> str:
+        """Clean and validate response quality"""
+        if not response:
+            return response
+
+        # Remove repetitive uncertainty phrases
+        response = self._remove_repetitive_uncertainty(response)
+
+        # Remove excessive repetition
+        response = self._remove_sentence_repetition(response)
+
+        # Ensure proper ending
+        response = response.strip()
+        if response and not response.endswith((".", "!", "?")):
+            response += "."
+
+        return response
+
+    def _remove_repetitive_uncertainty(self, response: str) -> str:
+        """Remove repetitive uncertainty and apologetic phrases"""
+        import re
+
+        # Patterns to remove/replace
+        uncertainty_patterns = [
+            r"I apologize[^.]*\.",
+            r"I'm sorry[^.]*\.",
+            r"Unfortunately[^.]*\.",
+            r"I regret[^.]*\.",
+            r"I must clarify[^.]*\.",
+            r"As of my (?:last update|knowledge cutoff)[^.]*\.",
+        ]
+
+        for pattern in uncertainty_patterns:
+            response = re.sub(pattern, "", response, flags=re.IGNORECASE)
+
+        # If response starts with uncertainty but then provides info, keep the info part
+        if "I don't have" in response[:50] and len(response) > 100:
+            sentences = response.split(".")
+            # Find first sentence that's not about lacking information
+            for i, sentence in enumerate(sentences):
+                if not any(
+                    phrase in sentence.lower()
+                    for phrase in ["don't have", "cannot provide", "not available"]
+                ):
+                    response = ". ".join(sentences[i:])
+                    break
+
+        return response.strip()
+
+    def _remove_sentence_repetition(self, response: str) -> str:
+        """Remove repetitive sentences"""
+        sentences = [s.strip() for s in response.split(".") if s.strip()]
+
+        # Remove duplicate sentences (case-insensitive)
+        seen = set()
+        unique_sentences = []
+
+        for sentence in sentences:
+            sentence_lower = sentence.lower()
+            if sentence_lower not in seen and len(sentence) > 5:
+                unique_sentences.append(sentence)
+                seen.add(sentence_lower)
+
+        if unique_sentences:
+            return ". ".join(unique_sentences) + "."
+        else:
+            return response
+
+    def _is_poor_quality_response(self, response: str) -> bool:
+        """Detect poor quality responses that need retry"""
+        if not response or len(response.strip()) < 20:
+            return True
+
+        response_lower = response.lower()
+
+        # Check for repetitive uncertainty
+        uncertainty_count = sum(
+            1
+            for phrase in [
+                "i don't have",
+                "i cannot",
+                "i'm sorry",
+                "unfortunately",
+                "i apologize",
+                "i regret",
+                "i must clarify",
+            ]
+            if phrase in response_lower
+        )
+
+        if uncertainty_count >= 2:
+            return True
+
+        # Check for excessive repetition
+        sentences = response.split(".")
+        if len(sentences) > 3:
+            unique_starts = set()
+            for sentence in sentences:
+                if len(sentence.strip()) > 10:
+                    start = sentence.strip()[:20].lower()
+                    if start in unique_starts:
+                        return True
+                    unique_starts.add(start)
+
+        # Check if response is too vague despite having context
+        if len(response) < 30:
+            return True
+
+        return False
