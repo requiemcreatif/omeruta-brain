@@ -1,7 +1,7 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .services.enhanced_tinyllama_agent import EnhancedTinyLlamaAgent
+from .services.enhanced_phi3_agent import EnhancedPhi3Agent
 from .services.conversation_memory import ConversationMemory
 from knowledge_base.services.enhanced_rag import EnhancedRAGService
 from knowledge_base.services.pgvector_search import PgVectorSearchService
@@ -31,7 +31,7 @@ class AIAssistantView(View):
 
     def get(self, request, *args, **kwargs):
         # Use enhanced agent for better stats
-        agent = EnhancedTinyLlamaAgent()
+        agent = EnhancedPhi3Agent()
         status = agent.get_knowledge_stats()
         model_info = (
             agent.llm_service.get_model_info()
@@ -65,7 +65,7 @@ class AIAssistantView(View):
         return render(request, self.template_name, context)
 
 
-class TinyLlamaViewSet(viewsets.GenericViewSet):
+class Phi3AgentViewSet(viewsets.GenericViewSet):
     """Enhanced ViewSet with advanced RAG and conversation memory"""
 
     permission_classes = [permissions.IsAuthenticated]
@@ -79,19 +79,19 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
         super().__init__(*args, **kwargs)
 
         # Use shared instances to avoid reloading models
-        if TinyLlamaViewSet._shared_agent is None:
-            logger.info("🚀 Initializing shared AI models (first time)...")
-            TinyLlamaViewSet._shared_agent = EnhancedTinyLlamaAgent()
-            TinyLlamaViewSet._shared_search_service = PgVectorSearchService()
-            TinyLlamaViewSet._shared_rag_service = EnhancedRAGService()
-            logger.info("✅ Shared AI models initialized successfully")
+        if Phi3AgentViewSet._shared_agent is None:
+            logger.info("🚀 Initializing shared Phi-3 models (first time)...")
+            Phi3AgentViewSet._shared_agent = EnhancedPhi3Agent()
+            Phi3AgentViewSet._shared_search_service = PgVectorSearchService()
+            Phi3AgentViewSet._shared_rag_service = EnhancedRAGService()
+            logger.info("✅ Shared Phi-3 models initialized successfully")
         else:
-            logger.info("♻️ Reusing existing AI models (no reload needed)")
+            logger.info("♻️ Reusing existing Phi-3 models (no reload needed)")
 
-        self.agent = TinyLlamaViewSet._shared_agent
-        self.enhanced_agent = TinyLlamaViewSet._shared_agent  # Same instance
-        self.search_service = TinyLlamaViewSet._shared_search_service
-        self.rag_service = TinyLlamaViewSet._shared_rag_service
+        self.agent = Phi3AgentViewSet._shared_agent
+        self.enhanced_agent = Phi3AgentViewSet._shared_agent  # Same instance
+        self.search_service = Phi3AgentViewSet._shared_search_service
+        self.rag_service = Phi3AgentViewSet._shared_rag_service
 
     @action(detail=False, methods=["post"])
     def chat(self, request):
@@ -210,7 +210,7 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
         """Get agent and knowledge base status"""
         try:
             # Use cached model info if available to avoid triggering loads
-            if TinyLlamaViewSet._shared_agent is not None:
+            if Phi3AgentViewSet._shared_agent is not None:
                 stats = self.agent.get_knowledge_stats()
                 model_info = self.agent.llm_service.get_model_info()
             else:
@@ -219,7 +219,11 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
                     "models_loaded": False,
                     "message": "Models not yet initialized",
                 }
-                model_info = {"loaded": False, "name": "TinyLlama", "device": "cpu"}
+                model_info = {
+                    "loaded": False,
+                    "name": "Phi-3-mini-128k-instruct",
+                    "device": "cpu",
+                }
 
             return Response(
                 {
@@ -227,7 +231,7 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
                     "model_info": model_info,
                     "agent_type": (
                         self.agent.agent_type
-                        if TinyLlamaViewSet._shared_agent
+                        if Phi3AgentViewSet._shared_agent
                         else "general"
                     ),
                     "available_agent_types": [
@@ -237,7 +241,7 @@ class TinyLlamaViewSet(viewsets.GenericViewSet):
                         "content_analyzer",
                         "live_research",
                     ],
-                    "models_shared": TinyLlamaViewSet._shared_agent is not None,
+                    "models_shared": Phi3AgentViewSet._shared_agent is not None,
                 }
             )
         except Exception as e:

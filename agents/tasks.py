@@ -4,7 +4,7 @@ from django.core.cache import cache
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from .services.tinyllama_agent import TinyLlamaAgent
-from .services.enhanced_tinyllama_agent import EnhancedTinyLlamaAgent
+from .services.enhanced_phi3_agent import EnhancedPhi3Agent
 from .services.enhanced_search_service import EnhancedVectorSearchService
 from .services.conversation_memory import ConversationMemory
 import time
@@ -25,10 +25,14 @@ def process_user_message_async(
     agent_type="general",
     max_tokens=300,
 ):
-    """Process user message asynchronously with enhanced TinyLlama"""
+    """Process user message asynchronously with enhanced Phi3"""
     task_id = self.request.id
 
     try:
+        # Add null check for message
+        if not message:
+            message = ""
+
         # Update task status
         cache.set(
             f"task_status:{task_id}",
@@ -61,7 +65,7 @@ def process_user_message_async(
         )
 
         # Initialize enhanced agent with specified type for better quality
-        agent = EnhancedTinyLlamaAgent(agent_type=agent_type)
+        agent = EnhancedPhi3Agent(agent_type=agent_type)
 
         cache.set(
             f"task_status:{task_id}",
@@ -292,6 +296,11 @@ def process_multiagent_query(
 
         # Simple agent selection logic
         agent_type = agent_preference or "general"
+
+        # Add null check for query before calling .lower()
+        if not query:
+            query = ""
+
         query_lower = query.lower()
 
         # Determine best agent based on query content
@@ -552,7 +561,7 @@ def health_check():
     """Health check task for monitoring"""
     try:
         # Check if AI services are available
-        agent = EnhancedTinyLlamaAgent()
+        agent = EnhancedPhi3Agent()
         is_available = agent.llm_service.is_available()
 
         return {

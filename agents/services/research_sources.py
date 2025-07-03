@@ -14,30 +14,12 @@ class ResearchSourcesConfig:
         self.topic_patterns = {
             # Political/Government topics
             "politics": {
-                "keywords": [
-                    "president",
-                    "election",
-                    "government",
-                    "politics",
-                    "congress",
-                    "senate",
-                    "white house",
-                    "biden",
-                    "trump",
-                    "democrat",
-                    "republican",
-                    "vote",
-                    "campaign",
-                    "policy",
-                    "administration",
-                ],
+                "keywords": [],
                 "sources": [
                     "https://www.reuters.com/world/us/",
                     "https://www.bbc.com/news/world-us-canada",
                     "https://apnews.com/hub/politics",
                     "https://www.politico.com/",
-                    "https://en.wikipedia.org/wiki/President_of_the_United_States",
-                    "https://en.wikipedia.org/wiki/2024_United_States_presidential_election",
                     "https://www.cnn.com/politics",
                     "https://www.npr.org/sections/politics/",
                 ],

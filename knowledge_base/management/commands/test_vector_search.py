@@ -1,19 +1,27 @@
 from django.core.management.base import BaseCommand
 from knowledge_base.services.pgvector_search import PgVectorSearchService
 from knowledge_base.services.enhanced_rag import EnhancedRAGService
-from agents.services.enhanced_tinyllama_agent import EnhancedTinyLlamaAgent
+from agents.services.enhanced_phi3_agent import EnhancedPhi3Agent
 import time
+import logging
+
+# Set up logging to see debug info
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Test vector search and RAG functionality"
+    help = "Test vector search and Phi3 general agent functionality"
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "--query", type=str, required=True, help="Search query to test"
+            "--query",
+            type=str,
+            default="Hello, test the general agent",
+            help="Search query to test (default: 'Hello, test the general agent')",
         )
         parser.add_argument(
-            "--top-k", type=int, default=5, help="Number of results to return"
+            "--top-k", type=int, default=3, help="Number of results to return"
         )
         parser.add_argument(
             "--show-details", action="store_true", help="Show detailed results"
@@ -24,188 +32,227 @@ class Command(BaseCommand):
         parser.add_argument(
             "--test-agent",
             action="store_true",
-            help="Test enhanced agent with TinyLlama",
+            default=True,
+            help="Test enhanced Phi3 agent (default: True)",
         )
         parser.add_argument(
             "--agent-type",
             type=str,
             default="general",
             choices=["general", "research", "qa", "content_analyzer"],
-            help="Agent type for testing",
+            help="Agent type for testing (default: general)",
+        )
+        parser.add_argument(
+            "--skip-context",
+            action="store_true",
+            help="Skip context retrieval to test model only",
+        )
+        parser.add_argument(
+            "--max-tokens",
+            type=int,
+            default=100,
+            help="Maximum tokens for response (default: 100)",
         )
 
     def handle(self, *args, **options):
         query = options["query"]
+        agent_type = options["agent_type"]
+        use_context = not options["skip_context"]
 
-        self.stdout.write(f"\n🔍 Testing search for: '{query}'")
+        self.stdout.write(f"\n🧠 Testing Phi3 General Agent")
+        self.stdout.write(f"Query: '{query}'")
+        self.stdout.write(f"Agent Type: {agent_type}")
+        self.stdout.write(f"Use Context: {use_context}")
         self.stdout.write("=" * 60)
 
-        # Test 1: Vector Search
-        self.stdout.write("\n1️⃣ Testing Vector Search...")
-        search_service = PgVectorSearchService()
-        search_result = search_service.enhanced_search(query)
+        # Test 0: Quick System Check
+        self.stdout.write("\n0️⃣ System Health Check...")
+        try:
+            # Test database connection
+            from django.db import connection
 
-        self.stdout.write(f"\n📊 Search Results:")
-        self.stdout.write(f"  Retrieval time: {search_result['retrieval_time_ms']}ms")
-        self.stdout.write(f"  Total candidates: {search_result['total_candidates']}")
-        self.stdout.write(f"  Unique candidates: {search_result['unique_candidates']}")
-        self.stdout.write(f"  Final results: {search_result['final_count']}")
-        self.stdout.write(
-            f"  Query expansions: {len(search_result['query_expansions'])}"
-        )
-        self.stdout.write(
-            f"  Used cross-encoder: {search_result['used_cross_encoder']}"
-        )
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+            self.stdout.write("  ✅ Database connection: OK")
+        except Exception as e:
+            self.stdout.write(f"  ❌ Database connection: {e}")
+            return
 
-        # Show top results
-        if search_result["results"]:
+        # Test embedding service
+        try:
+            search_service = PgVectorSearchService()
+            stats = search_service.get_search_stats()
             self.stdout.write(
-                f"\n🎯 Top {min(options['top_k'], len(search_result['results']))} Results:"
+                f"  ✅ Vector search: {stats['total_embeddings']} embeddings available"
             )
-            for i, result in enumerate(search_result["results"][: options["top_k"]]):
-                score = result.get("combined_score", result["similarity"])
-                self.stdout.write(f"\n  {i+1}. {result['page_title']}")
+        except Exception as e:
+            self.stdout.write(f"  ❌ Vector search setup: {e}")
+
+        # Test 1: Agent Initialization
+        self.stdout.write(f"\n1️⃣ Initializing Phi3 Agent ({agent_type})...")
+        init_start = time.time()
+
+        try:
+            agent = EnhancedPhi3Agent(agent_type=agent_type)
+            init_time = (time.time() - init_start) * 1000
+            self.stdout.write(f"  ✅ Agent initialized in {init_time:.0f}ms")
+
+            # Check model availability
+            model_available = agent.llm_service.is_available()
+            self.stdout.write(f"  Model loaded: {'✅' if model_available else '❌'}")
+
+            if model_available:
+                model_info = agent.llm_service.get_model_info()
+                self.stdout.write(f"  Model: {model_info.get('name', 'Unknown')}")
+                self.stdout.write(f"  Device: {model_info.get('device', 'Unknown')}")
+
+                # Handle memory usage - it might be a string or number
+                memory_usage = model_info.get("memory_usage", "Unknown")
+                if isinstance(memory_usage, (int, float)):
+                    self.stdout.write(f"  Memory: {memory_usage:.1f}GB")
+                else:
+                    self.stdout.write(f"  Memory: {memory_usage}")
+            else:
                 self.stdout.write(
-                    f"     Score: {score:.3f} | Quality: {result['quality_score']:.3f}"
+                    "  ❌ Model not available - initialization may have failed"
                 )
-                self.stdout.write(f"     URL: {result['page_url']}")
+                return
 
-                if options["show_details"]:
-                    preview = (
-                        result["text"][:200] + "..."
-                        if len(result["text"]) > 200
-                        else result["text"]
-                    )
-                    self.stdout.write(f"     Preview: {preview}")
-        else:
-            self.stdout.write(self.style.WARNING("\n  No results found"))
+        except Exception as e:
+            self.stdout.write(f"  ❌ Agent initialization failed: {e}")
+            return
 
-        # Test 2: RAG Pipeline
-        if options["test_rag"] or options["test_agent"]:
-            self.stdout.write(f"\n2️⃣ Testing RAG Pipeline...")
-            rag_service = EnhancedRAGService()
-            rag_result = rag_service.generate_response(query)
+        # Test 2: Context Retrieval (if enabled)
+        context_time = 0
+        context_sources = 0
 
-            self.stdout.write(
-                f"  Total time: {rag_result['search_metadata']['total_time_ms']}ms"
+        if use_context:
+            self.stdout.write(f"\n2️⃣ Testing Context Retrieval...")
+            context_start = time.time()
+
+            try:
+                search_result = search_service.enhanced_search(query)
+                context_time = (time.time() - context_start) * 1000
+                context_sources = len(search_result.get("results", []))
+
+                self.stdout.write(
+                    f"  ✅ Context search completed in {context_time:.0f}ms"
+                )
+                self.stdout.write(f"  📚 Found {context_sources} relevant sources")
+
+                if options["show_details"] and context_sources > 0:
+                    self.stdout.write(f"\n  📖 Top sources:")
+                    for i, result in enumerate(search_result["results"][:3]):
+                        score = result.get(
+                            "combined_score", result.get("similarity", 0)
+                        )
+                        self.stdout.write(
+                            f"    {i+1}. {result['page_title']} (score: {score:.3f})"
+                        )
+
+            except Exception as e:
+                self.stdout.write(f"  ❌ Context retrieval failed: {e}")
+                use_context = False  # Fallback to no context
+
+        # Test 3: Complete Agent Response
+        self.stdout.write(f"\n3️⃣ Testing Complete Agent Response...")
+        response_start = time.time()
+
+        try:
+            # Configure response
+            response_config = {
+                "max_tokens": options["max_tokens"],
+                "temperature": 0.7,
+            }
+
+            # Process message
+            result = agent.process_message(
+                message=query,
+                use_context=use_context,
+                response_config=response_config,
             )
+
+            total_time = (time.time() - response_start) * 1000
+
+            # Display results
+            self.stdout.write(f"\n📊 Results:")
+            self.stdout.write(f"  Status: {result.get('status', 'unknown')}")
+            self.stdout.write(f"  Total time: {total_time:.0f}ms")
             self.stdout.write(
-                f"  Sources used: {rag_result['search_metadata']['sources_used']}"
+                f"  Processing time: {result.get('processing_time_ms', 0):.0f}ms"
             )
+            self.stdout.write(f"  Used context: {result.get('used_context', False)}")
+            self.stdout.write(f"  Sources: {len(result.get('sources', []))}")
+            self.stdout.write(f"  Model: {result.get('model_used', 'unknown')}")
+
+            # Quality scores
+            if result.get("quality_scores"):
+                self.stdout.write(f"\n📈 Quality Scores:")
+                for metric, score in result["quality_scores"].items():
+                    self.stdout.write(f"     {metric}: {score:.3f}")
+
+            # Response
+            if result.get("status") == "success" and result.get("response"):
+                self.stdout.write(f"\n💬 Generated Response:")
+                self.stdout.write("=" * 50)
+                self.stdout.write(result["response"])
+                self.stdout.write("=" * 50)
+            else:
+                error_msg = result.get("error_message", "No response generated")
+                self.stdout.write(f"  ❌ Error: {error_msg}")
+
+        except Exception as e:
+            self.stdout.write(f"  ❌ Agent processing failed: {e}")
+            import traceback
 
             if options["show_details"]:
-                self.stdout.write(f"\n📝 Generated Context Preview:")
-                context_preview = (
-                    rag_result["context"][:300] + "..."
-                    if len(rag_result["context"]) > 300
-                    else rag_result["context"]
-                )
-                self.stdout.write(context_preview)
+                self.stdout.write(f"  Full error: {traceback.format_exc()}")
 
-                self.stdout.write(f"\n💬 Enhanced Prompt Preview:")
-                prompt_preview = (
-                    rag_result["enhanced_prompt"][:400] + "..."
-                    if len(rag_result["enhanced_prompt"]) > 400
-                    else rag_result["enhanced_prompt"]
-                )
-                self.stdout.write(prompt_preview)
-
-        # Test 3: Complete Agent
-        if options["test_agent"]:
-            self.stdout.write(
-                f"\n3️⃣ Testing Enhanced Agent ({options['agent_type']})..."
-            )
-
-            agent = EnhancedTinyLlamaAgent(agent_type=options["agent_type"])
-
-            # Check if TinyLlama is available
-            if not agent.llm_service.is_available():
-                self.stdout.write(
-                    self.style.WARNING(
-                        "  TinyLlama model not available - testing context only"
-                    )
-                )
-
-                # Test context generation only
-                context_result = agent.get_conversation_context(query)
-                if "error" not in context_result:
-                    self.stdout.write(
-                        f"  Context generated: {len(context_result['context'])} chars"
-                    )
-                    self.stdout.write(f"  Sources: {len(context_result['sources'])}")
-                else:
-                    self.stdout.write(f"  Context error: {context_result['error']}")
-            else:
-                self.stdout.write("  🚀 Generating complete response...")
-                start_time = time.time()
-
-                agent_result = agent.process_message(
-                    query,
-                    use_context=True,
-                    response_config={
-                        "style": "informative",
-                        "max_length": "medium",
-                        "max_tokens": 200,
-                        "temperature": 0.7,
-                    },
-                )
-
-                total_time = (time.time() - start_time) * 1000
-
-                self.stdout.write(f"\n🎯 Agent Results:")
-                self.stdout.write(f"  Status: {agent_result['status']}")
-                self.stdout.write(f"  Used context: {agent_result['used_context']}")
-                self.stdout.write(f"  Total processing time: {total_time:.0f}ms")
-                self.stdout.write(f"  Sources: {len(agent_result['sources'])}")
-
-                if agent_result["quality_scores"]:
-                    self.stdout.write(f"\n📊 Quality Scores:")
-                    for metric, score in agent_result["quality_scores"].items():
-                        self.stdout.write(f"     {metric}: {score:.3f}")
-
-                if agent_result["status"] == "success":
-                    self.stdout.write(f"\n💬 Generated Response:")
-                    self.stdout.write("=" * 50)
-                    self.stdout.write(agent_result["response"])
-                    self.stdout.write("=" * 50)
-                else:
-                    self.stdout.write(
-                        f"  Error: {agent_result.get('error_message', 'Unknown error')}"
-                    )
-
-        # Test 4: Performance Summary
-        self.stdout.write(f"\n4️⃣ Performance Summary:")
+        # Test 4: Performance Analysis
+        self.stdout.write(f"\n4️⃣ Performance Analysis:")
         self.stdout.write("=" * 40)
 
-        if search_result["results"]:
-            avg_score = sum(
-                r.get("combined_score", r["similarity"])
-                for r in search_result["results"]
-            ) / len(search_result["results"])
-            self.stdout.write(f"  Average relevance score: {avg_score:.3f}")
+        self.stdout.write(f"  Agent init: {init_time:.0f}ms")
+        if use_context:
+            self.stdout.write(f"  Context retrieval: {context_time:.0f}ms")
+        self.stdout.write(f"  Response generation: {total_time:.0f}ms")
 
-        self.stdout.write(
-            f"  Vector search time: {search_result['retrieval_time_ms']}ms"
-        )
-
-        if options["test_rag"]:
+        # Performance recommendations
+        self.stdout.write(f"\n💡 Performance Notes:")
+        if init_time > 5000:
             self.stdout.write(
-                f"  RAG pipeline time: {rag_result['search_metadata']['total_time_ms']}ms"
+                f"  ⚠️  Slow initialization ({init_time:.0f}ms) - model loading issue?"
+            )
+        if context_time > 2000:
+            self.stdout.write(
+                f"  ⚠️  Slow context retrieval ({context_time:.0f}ms) - database performance?"
+            )
+        if total_time > 10000:
+            self.stdout.write(
+                f"  ⚠️  Slow response generation ({total_time:.0f}ms) - consider async processing"
             )
 
-        # System status
-        stats = search_service.get_search_stats()
-        self.stdout.write(f"\n🔧 System Status:")
-        self.stdout.write(
-            f"  Embedding model: {'✅' if stats['embedding_model_available'] else '❌'}"
-        )
-        self.stdout.write(
-            f"  Cross-encoder: {'✅' if stats['cross_encoder_available'] else '❌'}"
-        )
+        if total_time < 5000:
+            self.stdout.write(f"  ✅ Good performance overall ({total_time:.0f}ms)")
 
-        # Usage suggestions
-        self.stdout.write(f"\n💡 Try these variations:")
-        self.stdout.write(f"  --show-details   (detailed output)")
-        self.stdout.write(f"  --test-rag       (test RAG pipeline)")
-        self.stdout.write(f"  --test-agent     (test complete agent)")
-        self.stdout.write(f"  --agent-type research  (different agent types)")
+        # Test 5: Quick Commands for Testing
+        self.stdout.write(f"\n5️⃣ Quick Test Commands:")
+        self.stdout.write("=" * 40)
+        self.stdout.write(f"  # Test without context (faster):")
+        self.stdout.write(f"  python manage.py test_vector_search --skip-context")
+        self.stdout.write(f"")
+        self.stdout.write(f"  # Test different agent types:")
+        self.stdout.write(
+            f"  python manage.py test_vector_search --agent-type research"
+        )
+        self.stdout.write(f"  python manage.py test_vector_search --agent-type qa")
+        self.stdout.write(f"")
+        self.stdout.write(f"  # Test with custom query:")
+        self.stdout.write(
+            f'  python manage.py test_vector_search --query "What is AI?"'
+        )
+        self.stdout.write(f"")
+        self.stdout.write(f"  # Detailed debugging:")
+        self.stdout.write(f"  python manage.py test_vector_search --show-details")
+
+        self.stdout.write(f"\n✅ Test completed!")

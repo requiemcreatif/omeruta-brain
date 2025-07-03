@@ -185,3 +185,7 @@ zstandard==0.23.0
 
 # Vector Database & Enhanced RAG
 pgvector==0.4.1
+
+# MLX Framework for Apple Silicon (macOS only)
+mlx>=0.26.0
+mlx-lm>=0.20.0

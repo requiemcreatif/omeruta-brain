@@ -1,4 +1,4 @@
-from .local_model_service import TinyLlamaService
+from .phi3_model_service import Phi3ModelService
 from .enhanced_search_service import EnhancedVectorSearchService
 from crawler.models import CrawledPage
 from typing import Dict, Any, Optional
@@ -12,7 +12,7 @@ class TinyLlamaAgent:
     """Agent powered by TinyLlama with access to your crawled knowledge base"""
 
     def __init__(self, agent_type: str = "general"):
-        self.llm_service = TinyLlamaService()
+        self.llm_service = Phi3ModelService()
         self.search_service = EnhancedVectorSearchService()
         self.agent_type = agent_type
         self.system_prompts = {
@@ -171,7 +171,7 @@ Please answer the user's question based on the context above. If the context doe
             }
 
         except Exception as e:
-            logger.error(f"Error processing message: {e}")
+            logger.error("Error processing message: %s", e)
             return {
                 "response": f"An error occurred: {str(e)}",
                 "model_used": "tinyllama",
@@ -182,7 +182,7 @@ Please answer the user's question based on the context above. If the context doe
 
     def set_agent_type(self, agent_type: str):
         if agent_type not in self.system_prompts:
-            raise ValueError(f"Invalid agent type: {agent_type}")
+            raise ValueError("Invalid agent type: %s" % agent_type)
         self.agent_type = agent_type
 
     def get_available_knowledge_stats(self) -> Dict[str, Any]:
@@ -202,5 +202,5 @@ Please answer the user's question based on the context above. If the context doe
                 "search_available": self.search_service.embedding_model is not None,
             }
         except Exception as e:
-            logger.error(f"Error getting knowledge stats: {e}")
+            logger.error("Error getting knowledge stats: %s", e)
             return {"error": str(e)}

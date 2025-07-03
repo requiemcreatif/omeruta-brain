@@ -497,6 +497,30 @@ def clean_markdown_for_vector_db(markdown_content: str) -> str:
 
     content = markdown_content
 
+    # Remove entire sections that are just noise for RAG
+    noisy_sections = [
+        "See also",
+        "References",
+        "External links",
+        "Further reading",
+        "Notes",
+        "Sources",
+        "Bibliography",
+    ]
+
+    for section_title in noisy_sections:
+        # Regex to find a section header and all content until the next header
+        # Handles both "## Title ##" and "## Title"
+        pattern = re.compile(
+            rf"(^|\n)##?\s*{re.escape(section_title)}\s*##?.*?(?=(\n##?\s*|$))",
+            re.IGNORECASE | re.DOTALL,
+        )
+        content = pattern.sub("", content)
+
+    # Remove malformed link/citation artifacts like [D](I) or [1]
+    # This specifically targets single-character or numeric "links"
+    content = re.sub(r"\[([a-zA-Z0-9]{1,2})\]\([^\)]+\)", "", content)
+
     # Remove all markdown links but keep the text content
     # Pattern: [text](url) -> text
     content = re.sub(r"\[([^\]]*)\]\([^\)]+\)", r"\1", content)
@@ -570,6 +594,9 @@ def clean_markdown_for_vector_db(markdown_content: str) -> str:
     content = re.sub(r"©[^\n]*", "", content)
     content = re.sub(r"Copyright[^\n]*", "", content, flags=re.IGNORECASE)
     content = re.sub(r"All Rights Reserved[^\n]*", "", content, flags=re.IGNORECASE)
+
+    # Remove any remaining lines that look like section headers
+    content = re.sub(r"^\n##?.*##?\n", "\n", content, flags=re.MULTILINE)
 
     # Split into sentences and filter out very short ones (likely navigation/metadata)
     sentences = []

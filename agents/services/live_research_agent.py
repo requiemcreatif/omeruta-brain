@@ -4,7 +4,7 @@ from typing import Dict, Any, List
 
 from asgiref.sync import sync_to_async
 
-from .enhanced_tinyllama_agent import EnhancedTinyLlamaAgent
+from .enhanced_phi3_agent import EnhancedPhi3Agent
 from .research_sources import research_sources
 from crawler.services import CrawlerService
 from crawler.models import CrawlJob
@@ -14,7 +14,7 @@ from knowledge_base.services.pgvector_search import PgVectorSearchService
 logger = logging.getLogger(__name__)
 
 
-class LiveResearchAgent(EnhancedTinyLlamaAgent):
+class LiveResearchAgent(EnhancedPhi3Agent):
     """Enhanced Research Agent with live internet research capabilities"""
 
     def __init__(self):

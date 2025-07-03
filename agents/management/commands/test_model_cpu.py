@@ -1,6 +1,6 @@
 import os
 from django.core.management.base import BaseCommand
-from agents.services.local_model_service import TinyLlamaService
+from agents.services.phi3_model_service import Phi3ModelService
 
 
 class Command(BaseCommand):
@@ -16,7 +16,7 @@ class Command(BaseCommand):
 
         try:
             # Initialize service
-            service = TinyLlamaService()
+            service = Phi3ModelService()
             self.stdout.write(f"📱 Device selected: {service.device}")
 
             # Test model loading

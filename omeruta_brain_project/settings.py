@@ -198,7 +198,7 @@ SIMPLE_JWT = {
         days=env("JWT_REFRESH_TOKEN_LIFETIME", default=7)
     ),
     "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
+    "BLACKLIST_AFTER_ROTATION": False,  # Disabled to avoid OutstandingToken error
     "UPDATE_LAST_LOGIN": True,
     "ALGORITHM": "HS256",
     "SIGNING_KEY": env("JWT_SECRET_KEY", default=SECRET_KEY),
@@ -260,13 +260,22 @@ CORS_ALLOW_CREDENTIALS = True
 # AI/ML Model Configuration
 AI_MODELS = {
     "LOCAL_MODELS": {
+        "phi3": {
+            "model_name": "microsoft/Phi-3-mini-128k-instruct",
+            "enabled": True,
+            "use_case": ["rag", "complex_qa", "long_context", "research"],
+            "max_tokens": 2048,  # Increased for Phi-3's capabilities
+            "temperature": 0.7,
+            "context_window": 128000,  # 128K context
+            "optimized_for": ["Apple Silicon", "RAG", "JSON Generation"],
+        },
         "tinyllama": {
             "model_name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-            "enabled": True,
+            "enabled": False,  # Deprecated in favor of Phi-3
             "use_case": ["simple_qa", "fast_response"],
             "max_tokens": 512,
             "temperature": 0.7,
-        }
+        },
     },
     "API_MODELS": {
         "gpt-3.5-turbo": {
@@ -276,26 +285,27 @@ AI_MODELS = {
             "temperature": 0.7,
         }
     },
-    "DEFAULT_LOCAL_MODEL": "tinyllama",
+    "DEFAULT_LOCAL_MODEL": "phi3",  # Changed from tinyllama to phi3
     "DEFAULT_API_MODEL": "gpt-3.5-turbo",
     "PREFER_LOCAL_FOR_SIMPLE": True,
     "AUTO_FALLBACK": True,
 }
 
-# Vector Database Configuration with pgvector
+# Vector Database Configuration with pgvector - Optimized for Phi-3's 128K context
 VECTOR_SETTINGS = {
     "EMBEDDING_MODEL": "all-MiniLM-L6-v2",
     "EMBEDDING_DIMENSIONS": 384,  # all-MiniLM-L6-v2 dimensions
     "CHUNK_SIZE": 512,  # Smaller chunks for better retrieval
     "CHUNK_OVERLAP": 50,  # Reduced overlap
     "SIMILARITY_THRESHOLD": 0.7,
-    "MAX_CONTEXT_TOKENS": 2000,
-    "RERANK_TOP_K": 20,  # Retrieve more, then rerank
-    "FINAL_TOP_K": 5,  # Final number of chunks to use
+    "MAX_CONTEXT_TOKENS": 25000,  # Increased for Phi-3's 128K context window
+    "RERANK_TOP_K": 30,  # Retrieve more for Phi-3's larger context
+    "FINAL_TOP_K": 10,  # More chunks can be used with 128K context
     "USE_CROSS_ENCODER": True,
     "CROSS_ENCODER_MODEL": "cross-encoder/ms-marco-MiniLM-L-2-v2",
     "QUERY_EXPANSION": True,
     "DIVERSITY_THRESHOLD": 0.8,  # Avoid too similar results
+    "PHI3_OPTIMIZED": True,  # Flag for Phi-3 specific optimizations
 }
 
 # Celery Configuration

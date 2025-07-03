@@ -26,6 +26,22 @@ class EnhancedRAGService:
             query=query, filters=context_filters or {}
         )
 
+        # Step 1.5: Filter results by quality score before passing to LLM
+        min_quality_threshold = 0.5
+        original_count = len(search_result["results"])
+
+        filtered_results = [
+            res
+            for res in search_result["results"]
+            if res.get("quality_score", 0) >= min_quality_threshold
+        ]
+        search_result["results"] = filtered_results
+
+        if len(filtered_results) < original_count:
+            logger.info(
+                f"Filtered out {original_count - len(filtered_results)} low-quality search results (threshold: {min_quality_threshold})"
+            )
+
         # Step 2: Build context for LLM
         context = self._build_context(search_result["results"])
 
@@ -132,12 +148,13 @@ QUESTION: {query}
 INSTRUCTIONS:
 - {style_instructions.get(response_style, style_instructions['informative'])}
 - {length_instructions.get(max_length, length_instructions['medium'])}
-- Base your answer primarily on the provided context
-- If the context doesn't contain enough information, acknowledge this clearly
-- Be accurate and avoid making assumptions beyond what's in the context"""
+- Base your answer strictly on the provided context. Do not add information that is not present in the text.
+- If the context contains conflicting information about the subject, point out the contradictions.
+- If the question is about the future or is speculative, state that you cannot predict the future and can only report the information available in the context.
+- Be accurate and avoid making assumptions beyond what's in the context."""
 
         if include_sources:
-            prompt += "\n- Reference specific sources when possible"
+            prompt += "\n- Reference specific sources when possible (e.g., 'According to Source X...')"
 
         prompt += "\n\nRESPONSE:"
 
